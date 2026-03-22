@@ -3,7 +3,6 @@ import { MangaCard } from '../objects/MangaCard'
 import { unlockedCardIds, getLevel, xpPct, findMyProgress, type CollectionData, type FlashCard } from '../api/progress'
 import type { GoogleUser } from '../api/auth'
 
-const WOOD   = 0x2c1a0e
 const ACCENT = 0x58c4dc
 const GOLD   = 0xffd700
 
@@ -58,21 +57,61 @@ export class CollectionScene extends Phaser.Scene {
     this.setupInput(height)
   }
 
-  // ── Fond bois (setScrollFactor 0 = toujours visible) ────────
+  // ── Fond crépuscule (scrollFactor 0 = fixe, ne défile pas) ──
   private drawBackground(width: number, height: number) {
-    const g = this.add.graphics().setScrollFactor(0).setDepth(0)
-    g.fillStyle(WOOD, 1)
-    g.fillRect(0, 0, width, height)
-    for (let y = 0; y < height; y += 8) {
-      const alpha = 0.04 + (y % 24 === 0 ? 0.07 : 0)
-      g.lineStyle(y % 16 === 0 ? 1 : 0.5, 0x5c3820, alpha)
-      g.lineBetween(0, y, width, y + Math.sin(y * 0.15) * 2)
+    const sf0 = (o: any) => { o.setScrollFactor(0); return o }
+
+    // Ciel dégradé indigo → orange couchant
+    const sky = sf0(this.add.graphics().setDepth(0))
+    sky.fillGradientStyle(0x1a0e54, 0x1a0e54, 0xf0723a, 0xf0723a, 1)
+    sky.fillRect(0, 0, width, height * 0.65)
+
+    // Étoiles
+    const stars = sf0(this.add.graphics().setDepth(1))
+    const rng = Phaser.Math.RND
+    for (let i = 0; i < 55; i++) {
+      stars.fillStyle(0xffffff, rng.frac() * 0.7 + 0.2)
+      stars.fillCircle(rng.frac() * width, rng.frac() * height * 0.5, rng.frac() * 1.4 + 0.3)
     }
-    g.fillStyle(0x0d0500, 0.5)
-    for (let i = 0; i < 40; i++) {
-      g.fillRect(0, i * (height / 40), i * 1.2, height / 40)
-      g.fillRect(width - i * 1.2, i * (height / 40), i * 1.2, height / 40)
+
+    // Soleil couchant (bas de l'écran, grand, orange)
+    const sun = sf0(this.add.graphics().setDepth(1))
+    const sx = width * 0.78, sy = height * 0.64
+    sun.fillStyle(0xff8c42, 0.12); sun.fillCircle(sx, sy, 58)
+    sun.fillStyle(0xff8c42, 0.28); sun.fillCircle(sx, sy, 40)
+    sun.fillStyle(0xff9e50, 0.65); sun.fillCircle(sx, sy, 26)
+    sun.fillStyle(0xffffff,  0.85); sun.fillCircle(sx, sy, 12)
+
+    // Collines silhouette
+    const hills = sf0(this.add.graphics().setDepth(2))
+    hills.fillStyle(0x2a1a3e, 1)
+    hills.fillEllipse(width * 0.10, height * 0.60, 260, 140)
+    hills.fillEllipse(width * 0.50, height * 0.57, 320, 160)
+    hills.fillEllipse(width * 0.90, height * 0.60, 240, 130)
+
+    // Sol
+    const ground = sf0(this.add.graphics().setDepth(2))
+    ground.fillGradientStyle(0x4a6a2a, 0x4a6a2a, 0x2a3e18, 0x2a3e18, 1)
+    ground.fillRect(0, height * 0.63, width, height * 0.37)
+    ground.fillStyle(0xffaa44, 0.15)
+    ground.fillRect(0, height * 0.63, width, 4)
+
+    // Arbres silhouette
+    const trees = sf0(this.add.graphics().setDepth(3))
+    trees.fillStyle(0x1a0e2a, 1)
+    const tpos = [{ x: 0.06, s: 1.1 }, { x: 0.16, s: 0.85 }, { x: 0.83, s: 1.1 }, { x: 0.93, s: 0.85 }]
+    for (const t of tpos) {
+      const tx = width * t.x, ty = height * 0.67, r = 18 * t.s
+      trees.fillRect(tx - 3, ty, 6, 28 * t.s)
+      trees.fillEllipse(tx, ty - 8,  r * 2,   r * 1.4)
+      trees.fillEllipse(tx, ty - 20, r * 1.6, r * 1.2)
+      trees.fillEllipse(tx, ty - 30, r * 1.1, r)
     }
+
+    // Overlay semi-transparent pour lisibilité des cartes
+    const overlay = sf0(this.add.graphics().setDepth(4))
+    overlay.fillStyle(0x000000, 0.35)
+    overlay.fillRect(0, 0, width, height)
   }
 
   // ── Header (setScrollFactor 0 = fixe en haut) ────────────────
@@ -111,18 +150,20 @@ export class CollectionScene extends Phaser.Scene {
 
   // ── Grille de cartes (world space, défile) ────────────────────
   private buildGrid(flashcards: FlashCard[], unlocked: Set<string>, width: number, height: number) {
-    const cols   = width < 400 ? 2 : 3
-    const padY   = 86
+    const cols   = width < 480 ? 2 : 3
+    const padY   = 90           // espace sous le header
     const gapX   = 12
-    const gapY   = 16
+    const gapY   = 14
     const cardW  = MangaCard.WIDTH
-    const startX = (width - (cols * cardW + (cols - 1) * gapX)) / 2 + cardW / 2
+    const cardH  = MangaCard.HEIGHT
+    // startX = bord gauche de la première carte (origine top-left)
+    const startX = (width - (cols * cardW + (cols - 1) * gapX)) / 2
 
     flashcards.forEach((card, i) => {
       const col = i % cols
       const row = Math.floor(i / cols)
       const x   = startX + col * (cardW + gapX)
-      const y   = padY + cardW / 2 + row * (MangaCard.HEIGHT + gapY) + MangaCard.HEIGHT / 2
+      const y   = padY + row * (cardH + gapY)
 
       const state = unlocked.has(card.id) ? 'unlocked' : 'locked'
       // MangaCard appelle scene.add.existing() dans son constructeur → dans la scène directement
@@ -135,7 +176,7 @@ export class CollectionScene extends Phaser.Scene {
     })
 
     const rows   = Math.ceil(flashcards.length / cols)
-    const totalH = padY + rows * (MangaCard.HEIGHT + gapY) + 80
+    const totalH = padY + rows * (cardH + gapY) + 80
     this.maxScroll = Math.max(0, totalH - height + 70)
   }
 

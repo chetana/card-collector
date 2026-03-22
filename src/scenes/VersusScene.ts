@@ -31,17 +31,39 @@ export class VersusScene extends Phaser.Scene {
   private drawBackground() {
     const { width, height } = this.scale
     const g = this.add.graphics()
-    g.fillStyle(WOOD, 1)
-    g.fillRect(0, 0, width, height)
 
-    // Grain de bois
-    for (let y = 0; y < height; y += 8) {
-      g.lineStyle(y % 16 === 0 ? 1 : 0.5, 0x5c3820, y % 24 === 0 ? 0.1 : 0.04)
-      g.lineBetween(0, y, width, y + Math.sin(y * 0.1) * 2)
-    }
+    // Ciel orage — dégradé cramoisi sombre
+    g.fillGradientStyle(0x1a0818, 0x1a0818, 0x3a1840, 0x3a1840, 1)
+    g.fillRect(0, 0, width, height * 0.65)
 
-    // Lignes diagonales combat (ambiance versus)
-    g.lineStyle(0.5, 0x6b3a1a, 0.15)
+    // Nuages menaçants
+    g.fillStyle(0x2a1838, 0.9)
+    g.fillEllipse(width * 0.20, height * 0.18, 200, 80)
+    g.fillEllipse(width * 0.55, height * 0.12, 260, 90)
+    g.fillEllipse(width * 0.82, height * 0.20, 180, 70)
+    g.fillStyle(0x1e1028, 1)
+    g.fillEllipse(width * 0.35, height * 0.22, 240, 95)
+    g.fillEllipse(width * 0.70, height * 0.16, 200, 85)
+
+    // Éclairs
+    g.lineStyle(1.5, 0xd4b8ff, 0.4)
+    g.lineBetween(width * 0.55, height * 0.18, width * 0.50, height * 0.35)
+    g.lineBetween(width * 0.50, height * 0.35, width * 0.55, height * 0.42)
+    g.lineStyle(1, 0xd4b8ff, 0.2)
+    g.lineBetween(width * 0.22, height * 0.22, width * 0.18, height * 0.40)
+
+    // Collines sombres
+    g.fillStyle(0x0e0818, 1)
+    g.fillEllipse(width * 0.10, height * 0.60, 240, 130)
+    g.fillEllipse(width * 0.50, height * 0.57, 300, 150)
+    g.fillEllipse(width * 0.90, height * 0.60, 220, 120)
+
+    // Sol arène
+    g.fillGradientStyle(0x1a1620, 0x1a1620, 0x0e0c14, 0x0e0c14, 1)
+    g.fillRect(0, height * 0.62, width, height * 0.38)
+
+    // Lignes diagonales de combat
+    g.lineStyle(0.5, 0x6b3a8a, 0.12)
     for (let i = -height; i < width + height; i += 28) {
       g.lineBetween(i, 0, i + height, height)
     }
