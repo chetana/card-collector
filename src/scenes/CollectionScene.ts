@@ -19,10 +19,11 @@ export class CollectionScene extends Phaser.Scene {
 
   constructor() { super('CollectionScene') }
 
-  init(data: { user: GoogleUser; collection: CollectionData; cards: FlashCard[] }) {
+  init(data: { user: GoogleUser; collection: CollectionData; cards: FlashCard[]; meKey: string | null }) {
     this.data.set('user', data.user)
     this.data.set('collection', data.collection)
     this.data.set('flashcards', data.cards)
+    this.data.set('meKey', data.meKey)
   }
 
   create() {
@@ -31,9 +32,10 @@ export class CollectionScene extends Phaser.Scene {
     const collection = this.data.get('collection') as CollectionData
     const flashcards = this.data.get('flashcards') as FlashCard[]
 
-    // Détermine quelle progression utiliser (dynamique, gère les accents)
+    // Détermine quelle progression utiliser — priorité meKey (email stable) puis fallback nom
+    const meKey = this.data.get('meKey') as string | null
     const firstName = user.name.split(' ')[0]
-    const myProgress = findMyProgress(collection, firstName)
+    const myProgress = (meKey && collection[meKey]) ? collection[meKey] : findMyProgress(collection, firstName)
     const unlocked = unlockedCardIds(myProgress)
     const level = getLevel(myProgress.xp)
     const lvlPct = xpPct(myProgress.xp)
@@ -49,7 +51,7 @@ export class CollectionScene extends Phaser.Scene {
     this.buildGrid(flashcards, unlocked, width, height)
 
     // Bouton VERSUS
-    this.drawVersusButton(width, height, user, collection, flashcards)
+    this.drawVersusButton(width, height, user, collection, flashcards, meKey)
 
     // Touch / scroll
     this.setupInput()
@@ -236,7 +238,7 @@ export class CollectionScene extends Phaser.Scene {
 
   private drawVersusButton(
     width: number, height: number,
-    user: GoogleUser, collection: CollectionData, flashcards: FlashCard[]
+    user: GoogleUser, collection: CollectionData, flashcards: FlashCard[], meKey: string | null
   ) {
     const btnW = 160, btnH = 40
     const bx = width / 2, by = height - 30
@@ -276,7 +278,7 @@ export class CollectionScene extends Phaser.Scene {
     })
     btnText.on('pointerdown', () => {
       this.scene.start('VersusScene', {
-        user, collection, cards: flashcards,
+        user, collection, cards: flashcards, meKey,
       })
     })
   }

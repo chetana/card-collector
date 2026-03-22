@@ -61,10 +61,11 @@ export class LoadScene extends Phaser.Scene {
       setProgress(0.4)
 
       status.setText('Chargement de la collection…')
-      const [collection, cards] = await Promise.all([
+      const [collectionResp, cards] = await Promise.all([
         fetchCollection(user.token),
         fetchCards(user.token),
       ])
+      const { data: collection, meKey } = collectionResp
       setProgress(0.9)
 
       // Petit délai pour l'effet
@@ -72,7 +73,7 @@ export class LoadScene extends Phaser.Scene {
       setProgress(1)
 
       this.time.delayedCall(200, () => {
-        this.scene.start('CollectionScene', { user, collection, cards })
+        this.scene.start('CollectionScene', { user, collection, cards, meKey })
       })
     } catch (e) {
       status.setText('Erreur de connexion — réessaie').setColor('#ff6b6b')

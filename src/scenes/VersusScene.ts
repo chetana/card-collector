@@ -10,10 +10,11 @@ const GOLD   = 0xffd700
 export class VersusScene extends Phaser.Scene {
   constructor() { super('VersusScene') }
 
-  init(data: { user: GoogleUser; collection: CollectionData; cards: FlashCard[] }) {
+  init(data: { user: GoogleUser; collection: CollectionData; cards: FlashCard[]; meKey: string | null }) {
     this.data.set('user', data.user)
     this.data.set('collection', data.collection)
     this.data.set('flashcards', data.cards)
+    this.data.set('meKey', data.meKey)
   }
 
   create() {
@@ -66,9 +67,12 @@ export class VersusScene extends Phaser.Scene {
     const user = this.data.get('user') as { name: string }
     const firstName = user.name.split(' ')[0]
 
-    // Dynamique : moi + le premier "autre"
-    const me = findMyProgress(collection, firstName)
-    const others = findOthers(collection, firstName)
+    // Dynamique : moi + le premier "autre" — priorité meKey (email stable) puis fallback nom
+    const meKey = this.data.get('meKey') as string | null
+    const me = (meKey && collection[meKey]) ? collection[meKey] : findMyProgress(collection, firstName)
+    const others = meKey
+      ? Object.entries(collection).filter(([k]) => k !== meKey).map(([, v]) => v as typeof me)
+      : findOthers(collection, firstName)
     const opponent = others[0] ?? { name: '???', xp: 0, sessions: [] }
 
     const g = this.add.graphics()
@@ -202,6 +206,7 @@ export class VersusScene extends Phaser.Scene {
         user: this.data.get('user'),
         collection: this.data.get('collection'),
         cards: this.data.get('flashcards'),
+        meKey: this.data.get('meKey'),
       })
     })
   }

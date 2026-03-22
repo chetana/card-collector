@@ -1,5 +1,6 @@
 export interface FlashProgress {
   name: string
+  email?: string
   xp: number
   sessions: { date: string; correct: number; approx: number; wrong: number; xp_gained: number }[]
 }
@@ -47,12 +48,14 @@ export function findOthers(collection: CollectionData, firstName: string): Flash
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'https://lys-267131866578.europe-west1.run.app'
 
-export async function fetchCollection(token: string): Promise<CollectionData> {
+export async function fetchCollection(token: string): Promise<{ data: CollectionData; meKey: string | null }> {
   const res = await fetch(`${API_BASE}/api/flashcards/collection`, {
     headers: { Authorization: `Bearer ${token}` },
   })
   if (!res.ok) throw new Error(`Collection fetch failed: ${res.status}`)
-  return res.json()
+  const raw = await res.json()
+  const { _meKey, ...data } = raw
+  return { data: data as CollectionData, meKey: _meKey ?? null }
 }
 
 export async function fetchCards(token: string): Promise<FlashCard[]> {
