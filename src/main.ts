@@ -14,6 +14,9 @@ const config: Phaser.Types.Core.GameConfig = {
     height: 844,
   },
   scene: [LoadScene, CollectionScene, VersusScene],
+  audio: {
+    noAudio: true,
+  },
   render: {
     antialias: true,
     roundPixels: false,

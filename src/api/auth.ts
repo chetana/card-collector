@@ -1,5 +1,11 @@
 // Google Identity Services auth — même pattern que chet_lys
-const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID ?? ''
+// Lire depuis la balise <meta name="google-signin-client_id"> (hardcodée dans index.html)
+// ou depuis import.meta.env en dev local
+function getClientId(): string {
+  const meta = document.querySelector('meta[name="google-signin-client_id"]')
+  if (meta) return meta.getAttribute('content') ?? ''
+  return import.meta.env.VITE_GOOGLE_CLIENT_ID ?? ''
+}
 
 export interface GoogleUser {
   name: string
@@ -27,7 +33,6 @@ export function getUser(): GoogleUser | null { return _currentUser }
 export function initAuth(): Promise<GoogleUser> {
   return new Promise(resolve => {
     _resolve = resolve
-    // Charger le script GIS si pas déjà là
     if (!(window as any).google) {
       const s = document.createElement('script')
       s.src = 'https://accounts.google.com/gsi/client'
@@ -42,7 +47,7 @@ export function initAuth(): Promise<GoogleUser> {
 function setupGIS() {
   const google = (window as any).google
   google.accounts.id.initialize({
-    client_id: CLIENT_ID,
+    client_id: getClientId(),
     use_fedcm_for_prompt: true,
     callback: (resp: any) => handleCredential(resp.credential),
   })
