@@ -240,46 +240,40 @@ export class CollectionScene extends Phaser.Scene {
     width: number, height: number,
     user: GoogleUser, collection: CollectionData, flashcards: FlashCard[], meKey: string | null
   ) {
-    const btnW = 160, btnH = 40
-    const bx = width / 2, by = height - 30
-
     const g = this.add.graphics().setDepth(5)
-
-    // Fond fixe (hors scroll)
     g.fillStyle(0x0a1525, 1)
-    g.fillRect(0, height - 64, width, 64)
+    g.fillRect(0, height - 70, width, 70)
     g.lineStyle(1, ACCENT, 0.3)
-    g.lineBetween(0, height - 64, width, height - 64)
+    g.lineBetween(0, height - 70, width, height - 70)
 
-    // Bouton VS
-    g.fillStyle(0x16213e, 1)
-    g.fillRoundedRect(bx - btnW / 2, by - btnH / 2, btnW, btnH, 8)
-    g.lineStyle(1.5, GOLD, 0.9)
-    g.strokeRoundedRect(bx - btnW / 2, by - btnH / 2, btnW, btnH, 8)
+    const by = height - 35
 
-    const btnText = this.add.text(bx, by, '⚔️  VERSUS LYS', {
-      fontSize: '13px', color: '#ffd700',
+    // Bouton Village (gauche)
+    const vBtn = this.add.text(width * 0.28, by, '🏘️  Village', {
+      fontSize: '12px', color: '#7fb8cc',
+      fontFamily: 'Nunito, sans-serif', fontStyle: 'bold',
+    }).setOrigin(0.5).setDepth(6).setInteractive({ useHandCursor: true })
+
+    vBtn.on('pointerover', () => vBtn.setColor('#ffffff'))
+    vBtn.on('pointerout',  () => vBtn.setColor('#7fb8cc'))
+    vBtn.on('pointerdown', () => {
+      this.scene.start('VillageScene', { user, collection, cards: flashcards, meKey })
+    })
+
+    // Séparateur vertical
+    g.lineStyle(1, ACCENT, 0.2)
+    g.lineBetween(width / 2, height - 60, width / 2, height - 10)
+
+    // Bouton Versus (droite)
+    const vsBtn = this.add.text(width * 0.72, by, '⚔️  Versus', {
+      fontSize: '12px', color: '#ffd700',
       fontFamily: '"Courier New", monospace', fontStyle: 'bold',
     }).setOrigin(0.5).setDepth(6).setInteractive({ useHandCursor: true })
 
-    btnText.on('pointerover', () => {
-      g.clear()
-      g.fillStyle(0x0a1525, 1); g.fillRect(0, height - 64, width, 64)
-      g.lineStyle(1, ACCENT, 0.3); g.lineBetween(0, height - 64, width, height - 64)
-      g.fillStyle(0x1e3558, 1); g.fillRoundedRect(bx - btnW / 2, by - btnH / 2, btnW, btnH, 8)
-      g.lineStyle(2, GOLD, 1); g.strokeRoundedRect(bx - btnW / 2, by - btnH / 2, btnW, btnH, 8)
-    })
-    btnText.on('pointerout', () => {
-      g.clear()
-      g.fillStyle(0x0a1525, 1); g.fillRect(0, height - 64, width, 64)
-      g.lineStyle(1, ACCENT, 0.3); g.lineBetween(0, height - 64, width, height - 64)
-      g.fillStyle(0x16213e, 1); g.fillRoundedRect(bx - btnW / 2, by - btnH / 2, btnW, btnH, 8)
-      g.lineStyle(1.5, GOLD, 0.9); g.strokeRoundedRect(bx - btnW / 2, by - btnH / 2, btnW, btnH, 8)
-    })
-    btnText.on('pointerdown', () => {
-      this.scene.start('VersusScene', {
-        user, collection, cards: flashcards, meKey,
-      })
+    vsBtn.on('pointerover', () => vsBtn.setColor('#ffffff'))
+    vsBtn.on('pointerout',  () => vsBtn.setColor('#ffd700'))
+    vsBtn.on('pointerdown', () => {
+      this.scene.start('VersusScene', { user, collection, cards: flashcards, meKey })
     })
   }
 

@@ -1,5 +1,7 @@
 import Phaser from 'phaser'
 import { LoadScene } from './scenes/LoadScene'
+import { VillageScene } from './scenes/VillageScene'
+import { PackScene } from './scenes/PackScene'
 import { CollectionScene } from './scenes/CollectionScene'
 import { VersusScene } from './scenes/VersusScene'
 
@@ -13,7 +15,7 @@ const config: Phaser.Types.Core.GameConfig = {
     width: 390,
     height: 844,
   },
-  scene: [LoadScene, CollectionScene, VersusScene],
+  scene: [LoadScene, VillageScene, PackScene, CollectionScene, VersusScene],
   audio: {
     noAudio: true,
   },

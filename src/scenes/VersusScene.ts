@@ -196,13 +196,13 @@ export class VersusScene extends Phaser.Scene {
     g.lineStyle(1.5, ACCENT, 0.8)
     g.strokeRoundedRect(bx - 80, height - 46, 160, 34, 8)
 
-    const btn = this.add.text(bx, height - 29, '← MA COLLECTION', {
+    const btn = this.add.text(bx, height - 29, '🏘️  MON VILLAGE', {
       fontSize: '12px', color: '#58c4dc',
       fontFamily: '"Courier New", monospace', fontStyle: 'bold',
     }).setOrigin(0.5).setDepth(6).setInteractive({ useHandCursor: true })
 
     btn.on('pointerdown', () => {
-      this.scene.start('CollectionScene', {
+      this.scene.start('VillageScene', {
         user: this.data.get('user'),
         collection: this.data.get('collection'),
         cards: this.data.get('flashcards'),
