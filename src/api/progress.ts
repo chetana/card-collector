@@ -4,14 +4,12 @@ export interface FlashProgress {
   sessions: { date: string; correct: number; approx: number; wrong: number; xp_gained: number }[]
 }
 
-export interface CollectionData {
-  chet: FlashProgress
-  lys: FlashProgress
-}
+// Clés dynamiques : prénom normalisé (chétana, vornsok, lys, etc.)
+export type CollectionData = Record<string, FlashProgress>
 
 export interface FlashCard {
   id: string; fr: string; kh: string; en?: string
-  phonetic_kh?: string; phonetic_fr?: string
+  phonetic_kh?: string; phonetic_fr?: string; hint?: string
 }
 
 // XP seuils pour chaque carte (débloquée si score cumulé suffisant)
@@ -26,6 +24,25 @@ export function unlockedCardIds(progress: FlashProgress): Set<string> {
     unlocked.add(String(i))
   }
   return unlocked
+}
+
+// Normalise un prénom : enlève les accents, lowercase — "Chétana" → "chetana"
+export function normalizeName(name: string): string {
+  return name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+}
+
+// Trouve la progression de l'utilisateur connecté dans le map dynamique
+export function findMyProgress(collection: CollectionData, firstName: string): FlashProgress {
+  const norm = normalizeName(firstName)
+  // Cherche une clé dont la normalisation correspond
+  const key = Object.keys(collection).find(k => normalizeName(k) === norm)
+  return key ? collection[key] : { name: firstName, xp: 0, sessions: [] }
+}
+
+// Retourne les progressions des autres joueurs
+export function findOthers(collection: CollectionData, firstName: string): FlashProgress[] {
+  const norm = normalizeName(firstName)
+  return Object.values(collection).filter(p => normalizeName(p.name ?? '') !== norm)
 }
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'https://lys-267131866578.europe-west1.run.app'

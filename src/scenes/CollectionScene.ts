@@ -1,11 +1,13 @@
 import Phaser from 'phaser'
 import { MangaCard } from '../objects/MangaCard'
-import { unlockedCardIds, getLevel, xpPct, type CollectionData, type FlashCard } from '../api/progress'
+import { unlockedCardIds, getLevel, xpPct, findMyProgress, type CollectionData, type FlashCard } from '../api/progress'
 import type { GoogleUser } from '../api/auth'
 
-const BG = 0x0d0d1a
-const ACCENT = 0x58c4dc
-const GOLD = 0xffd700
+const BG      = 0x1e0f06
+const WOOD    = 0x2c1a0e
+const ACCENT  = 0x58c4dc
+const GOLD    = 0xffd700
+const WARM    = 0xffe8cc
 
 export class CollectionScene extends Phaser.Scene {
   private cards: MangaCard[] = []
@@ -29,10 +31,9 @@ export class CollectionScene extends Phaser.Scene {
     const collection = this.data.get('collection') as CollectionData
     const flashcards = this.data.get('flashcards') as FlashCard[]
 
-    // Détermine quelle progression utiliser
-    const firstName = user.name.split(' ')[0].toLowerCase()
-    const isChet = /^(chet|chetana)$/i.test(firstName.normalize('NFD').replace(/[\u0300-\u036f]/g, ''))
-    const myProgress = isChet ? collection.chet : collection.lys
+    // Détermine quelle progression utiliser (dynamique, gère les accents)
+    const firstName = user.name.split(' ')[0]
+    const myProgress = findMyProgress(collection, firstName)
     const unlocked = unlockedCardIds(myProgress)
     const level = getLevel(myProgress.xp)
     const lvlPct = xpPct(myProgress.xp)
@@ -57,15 +58,23 @@ export class CollectionScene extends Phaser.Scene {
   private drawBackground() {
     const { width, height } = this.scale
     const g = this.add.graphics()
-    g.fillStyle(BG, 1)
+
+    // Fond bois foncé
+    g.fillStyle(WOOD, 1)
     g.fillRect(0, 0, width, height)
 
-    // Tramé manga
-    g.fillStyle(0x1a2a3a, 0.12)
-    for (let x = 0; x < width; x += 18) {
-      for (let y = 0; y < height; y += 18) {
-        if ((x + y) % 36 === 0) g.fillCircle(x, y, 0.9)
-      }
+    // Grain de bois — lignes horizontales
+    for (let y = 0; y < height; y += 8) {
+      const alpha = 0.04 + (y % 24 === 0 ? 0.07 : 0)
+      g.lineStyle(y % 16 === 0 ? 1 : 0.5, 0x5c3820, alpha)
+      g.lineBetween(0, y, width, y + Math.sin(y * 0.15) * 2)
+    }
+
+    // Vignette bords
+    g.fillStyle(0x0d0500, 0.5)
+    for (let i = 0; i < 40; i++) {
+      g.fillRect(0, i * (height / 40), i * 1.2, height / 40)
+      g.fillRect(width - i * 1.2, i * (height / 40), i * 1.2, height / 40)
     }
   }
 
@@ -75,34 +84,36 @@ export class CollectionScene extends Phaser.Scene {
     lvlPct: number, width: number
   ) {
     const g = this.add.graphics()
-    // Bande header
-    g.fillStyle(0x0a1525, 1)
-    g.fillRect(0, 0, width, 58)
-    g.lineStyle(1, ACCENT, 0.4)
-    g.lineBetween(0, 58, width, 58)
+    // Bande header bois foncé + dorure
+    g.fillStyle(0x180b04, 1)
+    g.fillRect(0, 0, width, 62)
+    g.lineStyle(1.5, GOLD, 0.5)
+    g.lineBetween(0, 62, width, 62)
+    g.lineStyle(0.5, GOLD, 0.2)
+    g.lineBetween(0, 64, width, 64)
 
     // Avatar + nom
-    this.add.text(14, 10, user.picture ? '' : level.avatar, { fontSize: '28px' }).setDepth(2)
-    this.add.text(48, 10, user.name.split(' ')[0], {
-      fontSize: '14px', color: '#f0f0ff', fontFamily: 'sans-serif', fontStyle: 'bold',
+    this.add.text(14, 10, level.avatar, { fontSize: '26px' }).setDepth(2)
+    this.add.text(46, 8, user.name.split(' ')[0], {
+      fontSize: '16px', color: '#' + (0xffe8cc).toString(16), fontFamily: 'Cinzel, serif', fontStyle: 'bold',
     }).setDepth(2)
-    this.add.text(48, 28, `${level.avatar} Nv.${level.level} — ${level.title}`, {
-      fontSize: '10px', color: '#58c4dc', fontFamily: 'sans-serif',
+    this.add.text(46, 28, `${level.avatar}  Nv.${level.level} · ${level.title}`, {
+      fontSize: '10px', color: '#58c4dc', fontFamily: 'Nunito, sans-serif', fontStyle: 'bold',
     }).setDepth(2)
 
     // XP bar
-    const barX = 48, barY = 44, barW = width - barX - 80
-    g.fillStyle(0x1a2a3a, 1); g.fillRoundedRect(barX, barY, barW, 5, 2)
-    g.fillStyle(level.color, 1); g.fillRoundedRect(barX, barY, barW * (lvlPct / 100), 5, 2)
-    this.add.text(barX + barW + 6, barY - 2, `${xp} XP`, {
-      fontSize: '9px', color: '#667788', fontFamily: 'monospace',
+    const barX = 46, barY = 48, barW = width - barX - 70
+    g.fillStyle(0x3d1f0a, 1); g.fillRoundedRect(barX, barY, barW, 6, 3)
+    g.fillStyle(level.color, 1); g.fillRoundedRect(barX, barY, barW * (lvlPct / 100), 6, 3)
+    this.add.text(barX + barW + 6, barY - 1, `${xp} XP`, {
+      fontSize: '9px', color: '#a07040', fontFamily: 'Nunito, sans-serif', fontStyle: 'bold',
     }).setDepth(2)
 
     // Titre section
-    this.add.text(14, 68, 'MA COLLECTION', {
-      fontSize: '11px', color: '#58c4dc',
-      fontFamily: '"Courier New", monospace', fontStyle: 'bold', letterSpacing: 2,
-    }).setDepth(2)
+    this.add.text(width / 2, 74, '✦  MA COLLECTION  ✦', {
+      fontSize: '11px', color: '#' + (GOLD).toString(16),
+      fontFamily: 'Cinzel, serif', fontStyle: 'bold', letterSpacing: 2,
+    }).setOrigin(0.5).setDepth(2)
   }
 
   private buildGrid(flashcards: FlashCard[], unlocked: Set<string>, width: number, height: number) {

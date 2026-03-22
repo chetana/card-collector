@@ -1,10 +1,11 @@
 import Phaser from 'phaser'
-import { unlockedCardIds, getLevel, xpPct, type CollectionData, type FlashCard } from '../api/progress'
+import { unlockedCardIds, getLevel, xpPct, findMyProgress, findOthers, type CollectionData, type FlashCard } from '../api/progress'
 import type { GoogleUser } from '../api/auth'
 
-const BG = 0x0d0d1a
+const BG     = 0x1e0f06
+const WOOD   = 0x2c1a0e
 const ACCENT = 0x58c4dc
-const GOLD = 0xffd700
+const GOLD   = 0xffd700
 
 export class VersusScene extends Phaser.Scene {
   constructor() { super('VersusScene') }
@@ -29,79 +30,79 @@ export class VersusScene extends Phaser.Scene {
   private drawBackground() {
     const { width, height } = this.scale
     const g = this.add.graphics()
-    g.fillStyle(BG, 1)
+    g.fillStyle(WOOD, 1)
     g.fillRect(0, 0, width, height)
 
-    // Lignes vitesse en diagonale (ambiance combat)
-    g.lineStyle(0.5, 0x1a2a3a, 0.5)
-    for (let i = -height; i < width + height; i += 22) {
+    // Grain de bois
+    for (let y = 0; y < height; y += 8) {
+      g.lineStyle(y % 16 === 0 ? 1 : 0.5, 0x5c3820, y % 24 === 0 ? 0.1 : 0.04)
+      g.lineBetween(0, y, width, y + Math.sin(y * 0.1) * 2)
+    }
+
+    // Lignes diagonales combat (ambiance versus)
+    g.lineStyle(0.5, 0x6b3a1a, 0.15)
+    for (let i = -height; i < width + height; i += 28) {
       g.lineBetween(i, 0, i + height, height)
     }
   }
 
   private drawHeader(width: number) {
     const g = this.add.graphics()
-    g.fillStyle(0x0a1525, 1)
+    g.fillStyle(0x180b04, 1)
     g.fillRect(0, 0, width, 50)
-    g.lineStyle(1, GOLD, 0.5)
+    g.lineStyle(1.5, GOLD, 0.6)
     g.lineBetween(0, 50, width, 50)
+    g.lineStyle(0.5, GOLD, 0.2)
+    g.lineBetween(0, 52, width, 52)
 
     this.add.text(width / 2, 25, '⚔️  VERSUS', {
       fontSize: '16px', color: '#ffd700',
-      fontFamily: '"Courier New", monospace', fontStyle: 'bold', letterSpacing: 3,
+      fontFamily: 'Cinzel, serif', fontStyle: 'bold', letterSpacing: 4,
     }).setOrigin(0.5)
   }
 
   private drawVersus(collection: CollectionData, flashcards: FlashCard[], width: number, height: number) {
     const cx = width / 2
+    const user = this.data.get('user') as { name: string }
+    const firstName = user.name.split(' ')[0]
 
-    // Ligne centrale verticale
+    // Dynamique : moi + le premier "autre"
+    const me = findMyProgress(collection, firstName)
+    const others = findOthers(collection, firstName)
+    const opponent = others[0] ?? { name: '???', xp: 0, sessions: [] }
+
     const g = this.add.graphics()
     g.lineStyle(1, GOLD, 0.3)
     g.lineBetween(cx, 60, cx, height - 70)
 
-    // VS au centre
-    this.add.text(cx, 90, 'VS', {
-      fontSize: '22px', color: '#ffd700',
-      fontFamily: '"Courier New", monospace', fontStyle: 'bold',
+    this.add.text(cx, 88, 'VS', {
+      fontSize: '26px', color: '#ffd700',
+      fontFamily: 'Cinzel, serif', fontStyle: 'bold',
     }).setOrigin(0.5).setDepth(2)
 
-    // Données
-    const chetLevel = getLevel(collection.chet.xp)
-    const lysLevel  = getLevel(collection.lys.xp)
-    const chetUnlocked = unlockedCardIds(collection.chet)
-    const lysUnlocked  = unlockedCardIds(collection.lys)
-    const chetPct = xpPct(collection.chet.xp)
-    const lysPct  = xpPct(collection.lys.xp)
-
+    const meLevel  = getLevel(me.xp)
+    const oppLevel = getLevel(opponent.xp)
+    const meUnlocked  = unlockedCardIds(me)
+    const oppUnlocked = unlockedCardIds(opponent)
     const halfW = cx - 20
 
-    // ── Côté CHET ──────────────────────────────────────────
-    this.drawPlayerCard(
-      g, 10, 60, halfW - 10, height - 140,
-      'Chet', chetLevel, collection.chet.xp, chetPct,
-      chetUnlocked, flashcards, ACCENT, 'left'
-    )
+    this.drawPlayerCard(g, 10, 60, halfW - 10, height - 140,
+      me.name || firstName, meLevel, me.xp, xpPct(me.xp),
+      meUnlocked, flashcards, ACCENT, 'left')
 
-    // ── Côté LYS ───────────────────────────────────────────
-    this.drawPlayerCard(
-      g, cx + 10, 60, halfW - 10, height - 140,
-      'Lys', lysLevel, collection.lys.xp, lysPct,
-      lysUnlocked, flashcards, 0xe879a8, 'right'
-    )
+    this.drawPlayerCard(g, cx + 10, 60, halfW - 10, height - 140,
+      opponent.name || '???', oppLevel, opponent.xp, xpPct(opponent.xp),
+      oppUnlocked, flashcards, 0xe879a8, 'right')
 
-    // ── Résultat global ────────────────────────────────────
-    const winner = collection.chet.xp >= collection.lys.xp ? 'Chet' : 'Lys'
-    const draw = collection.chet.xp === collection.lys.xp
-    const resultText = draw ? '🤝 Ex aequo !' : `🏆 ${winner} mène !`
-    this.add.text(cx, height - 105, resultText, {
+    const draw = me.xp === opponent.xp
+    const winner = me.xp >= opponent.xp ? (me.name || firstName) : (opponent.name || '???')
+    this.add.text(cx, height - 105, draw ? '🤝 Ex aequo !' : `🏆 ${winner} mène !`, {
       fontSize: '13px', color: draw ? '#58c4dc' : '#ffd700',
       fontFamily: '"Courier New", monospace', fontStyle: 'bold',
     }).setOrigin(0.5)
 
-    // Cartes communes (maîtrisées par les deux)
-    const both = [...chetUnlocked].filter(id => lysUnlocked.has(id))
-    this.add.text(cx, height - 88, `${both.length} carte${both.length > 1 ? 's' : ''} maîtrisée${both.length > 1 ? 's' : ''} en commun`, {
+    const both = [...meUnlocked].filter(id => oppUnlocked.has(id))
+    this.add.text(cx, height - 88, `${both.length} carte${both.length > 1 ? 's' : ''} en commun`, {
       fontSize: '10px', color: '#667788', fontFamily: 'sans-serif',
     }).setOrigin(0.5)
   }
@@ -118,7 +119,7 @@ export class VersusScene extends Phaser.Scene {
     const px = x + w / 2
 
     // Panel joueur
-    g.fillStyle(0x0a1525, 0.8)
+    g.fillStyle(0x180b04, 0.85)
     g.fillRoundedRect(x, y, w, h, 10)
     g.lineStyle(1, accent, 0.5)
     g.strokeRoundedRect(x, y, w, h, 10)
@@ -129,20 +130,20 @@ export class VersusScene extends Phaser.Scene {
 
     // Nom
     this.add.text(px, ty + 34, name, {
-      fontSize: '14px', color: '#f0f0ff',
-      fontFamily: 'sans-serif', fontStyle: 'bold',
+      fontSize: '14px', color: '#ffe8cc',
+      fontFamily: 'Cinzel, serif', fontStyle: 'bold',
     }).setOrigin(0.5).setDepth(2)
 
     // Niveau
     this.add.text(px, ty + 52, `Nv.${level.level} · ${level.title}`, {
-      fontSize: '10px', fontFamily: 'sans-serif',
+      fontSize: '10px', fontFamily: 'Nunito, sans-serif', fontStyle: 'bold',
       color: Phaser.Display.Color.IntegerToColor(accent).rgba,
     }).setOrigin(0.5).setDepth(2)
 
     // XP
     this.add.text(px, ty + 68, `${xp} XP`, {
-      fontSize: '12px', color: '#a0b8cc',
-      fontFamily: 'monospace', fontStyle: 'bold',
+      fontSize: '13px', color: '#ffe8cc',
+      fontFamily: 'Nunito, sans-serif', fontStyle: 'bold',
     }).setOrigin(0.5).setDepth(2)
 
     // XP bar

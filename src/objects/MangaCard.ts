@@ -3,30 +3,29 @@ import type { FlashCard } from '../api/progress'
 
 export type CardState = 'locked' | 'unlocked' | 'mastered'
 
-const CARD_W = 110
-const CARD_H = 155
+const CARD_W = 112
+const CARD_H = 158
 const RADIUS = 10
 
-// Palette manga
+// Palette bois chaud + accents lumineux
 const COL = {
-  bg_locked:    0x1a1a2e,
-  bg_unlocked:  0x16213e,
-  bg_mastered:  0x0f3460,
-  border_locked:   0x333355,
+  wood_dark:  0x2c1a0e,
+  wood_mid:   0x3d2410,
+  wood_light: 0x5c3820,
+  wood_grain: 0x4a2d14,
+  border_locked:   0x6b4c2a,
   border_unlocked: 0x58c4dc,
   border_mastered: 0xffd700,
-  text:    0xf0f0ff,
-  muted:   0x667788,
-  phonetic: 0x58c4dc,
-  tone_dot: 0x1e2a3a,
+  text_main:  0xfff5e6,
+  text_kh:    0xffe8cc,
+  phonetic:   0x7dd8f0,
+  phonetic_fr: 0xf0c070,
+  locked_fg:  0x8b6040,
 }
 
 export class MangaCard extends Phaser.GameObjects.Container {
   private _state: CardState
   private card: FlashCard
-  private bg!: Phaser.GameObjects.Graphics
-  private glowFx?: Phaser.FX.Glow
-  private flipTween?: Phaser.Tweens.Tween
 
   constructor(scene: Phaser.Scene, x: number, y: number, card: FlashCard, state: CardState) {
     super(scene, x, y)
@@ -46,56 +45,55 @@ export class MangaCard extends Phaser.GameObjects.Container {
 
   private draw() {
     this.removeAll(true)
-    const g = this.scene.add.graphics()
-    this.bg = g
 
+    const g = this.scene.add.graphics()
+
+    // ── Ombre portée ──────────────────────────────────────────
+    g.fillStyle(0x000000, 0.45)
+    g.fillRoundedRect(4, 5, CARD_W, CARD_H, RADIUS)
+
+    // ── Fond bois ─────────────────────────────────────────────
+    g.fillStyle(COL.wood_mid, 1)
+    g.fillRoundedRect(0, 0, CARD_W, CARD_H, RADIUS)
+
+    // Grain de bois — lignes horizontales légèrement ondulées
+    for (let y = 6; y < CARD_H - 6; y += 7) {
+      const alpha = 0.06 + (y % 21 === 0 ? 0.1 : 0)
+      g.lineStyle(y % 14 === 0 ? 1 : 0.5, COL.wood_grain, alpha)
+      g.lineBetween(4, y, CARD_W - 4, y + (Math.sin(y * 0.4) * 1.5))
+    }
+
+    // Vignette bords sombres (profondeur)
+    g.fillStyle(COL.wood_dark, 0.4)
+    g.fillRoundedRect(0, 0, CARD_W, 18, { tl: RADIUS, tr: RADIUS, bl: 0, br: 0 })
+    g.fillRoundedRect(0, CARD_H - 18, CARD_W, 18, { tl: 0, tr: 0, bl: RADIUS, br: RADIUS })
+
+    // ── Bordure principale ────────────────────────────────────
     const borderCol = this._state === 'mastered' ? COL.border_mastered
                     : this._state === 'unlocked'  ? COL.border_unlocked
                     : COL.border_locked
-    const bgCol     = this._state === 'mastered' ? COL.bg_mastered
-                    : this._state === 'unlocked'  ? COL.bg_unlocked
-                    : COL.bg_locked
+    const borderW   = this._state === 'mastered' ? 2.5
+                    : this._state === 'unlocked'  ? 2
+                    : 1.2
 
-    // Ombre portée
-    g.fillStyle(0x000000, 0.4)
-    g.fillRoundedRect(3, 4, CARD_W, CARD_H, RADIUS)
+    g.lineStyle(borderW, borderCol, 1)
+    g.strokeRoundedRect(0.5, 0.5, CARD_W - 1, CARD_H - 1, RADIUS)
 
-    // Fond
-    g.fillStyle(bgCol, 1)
-    g.fillRoundedRect(0, 0, CARD_W, CARD_H, RADIUS)
-
-    // Tramé manga (screen tone) — grille de petits points
-    if (this._state !== 'locked') {
-      g.fillStyle(COL.tone_dot, 0.35)
-      for (let row = 0; row < 12; row++) {
-        for (let col = 0; col < 8; col++) {
-          const ox = col % 2 === 0 ? 0 : 6
-          g.fillCircle(10 + col * 13 + ox, 10 + row * 13, 1.2)
-        }
-      }
-    }
-
-    // Bordure principale
-    g.lineStyle(this._state === 'mastered' ? 2.5 : 1.5, borderCol, 1)
-    g.strokeRoundedRect(0, 0, CARD_W, CARD_H, RADIUS)
-
-    // Ligne décorative intérieure
-    if (this._state !== 'locked') {
-      g.lineStyle(0.5, borderCol, 0.4)
-      g.strokeRoundedRect(5, 5, CARD_W - 10, CARD_H - 10, RADIUS - 3)
-    }
+    // Bordure intérieure fine
+    g.lineStyle(0.5, borderCol, this._state === 'locked' ? 0.2 : 0.35)
+    g.strokeRoundedRect(5, 5, CARD_W - 10, CARD_H - 10, RADIUS - 3)
 
     // Coins dorés si mastered
-    if (this._state === 'mastered') {
-      this.drawCornerAccents(g)
-    }
+    if (this._state === 'mastered') this.drawCornerAccents(g)
 
     this.add(g)
 
-    // Numéro de carte (coin haut gauche)
-    const numText = this.scene.add.text(8, 6, `#${this.card.id}`, {
-      fontSize: '9px', color: this._state === 'locked' ? '#445' : '#58c4dc',
-      fontFamily: '"Courier New", monospace', fontStyle: 'bold',
+    // Numéro de carte
+    const numText = this.scene.add.text(9, 7, `#${this.card.id}`, {
+      fontSize: '8px',
+      color: this._state === 'locked' ? '#7a5535' : '#58c4dc',
+      fontFamily: 'Cinzel, serif',
+      fontStyle: 'bold',
     })
     this.add(numText)
 
@@ -105,92 +103,128 @@ export class MangaCard extends Phaser.GameObjects.Container {
       this.drawContent()
     }
 
-    // Effet glow sur les cartes débloquées/maîtrisées
+    // Glow WebGL
     if (this._state !== 'locked' && this.postFX) {
-      this.glowFx = this.postFX.addGlow(
+      this.postFX.addGlow(
         this._state === 'mastered' ? 0xffd700 : 0x58c4dc,
-        this._state === 'mastered' ? 4 : 2,
-        0, false, 0.1, 8
+        this._state === 'mastered' ? 5 : 3,
+        0, false, 0.1, 10
       )
     }
   }
 
   private drawCornerAccents(g: Phaser.GameObjects.Graphics) {
-    g.lineStyle(1.5, 0xffd700, 0.8)
-    const d = 12
-    // Top-left
+    g.lineStyle(2, COL.border_mastered, 0.9)
+    const d = 14
     g.beginPath(); g.moveTo(3, 3 + d); g.lineTo(3, 3); g.lineTo(3 + d, 3); g.strokePath()
-    // Top-right
     g.beginPath(); g.moveTo(CARD_W - 3 - d, 3); g.lineTo(CARD_W - 3, 3); g.lineTo(CARD_W - 3, 3 + d); g.strokePath()
-    // Bottom-left
     g.beginPath(); g.moveTo(3, CARD_H - 3 - d); g.lineTo(3, CARD_H - 3); g.lineTo(3 + d, CARD_H - 3); g.strokePath()
-    // Bottom-right
     g.beginPath(); g.moveTo(CARD_W - 3 - d, CARD_H - 3); g.lineTo(CARD_W - 3, CARD_H - 3); g.lineTo(CARD_W - 3, CARD_H - 3 - d); g.strokePath()
   }
 
   private drawLocked() {
-    // Cadenas
-    const lock = this.scene.add.text(CARD_W / 2, CARD_H / 2 - 8, '🔒', {
-      fontSize: '28px',
+    // Hint emoji (grand, centré, style "silhouette mystère")
+    const hint = this.card.hint ?? '🎴'
+    const hintText = this.scene.add.text(CARD_W / 2, CARD_H / 2 - 16, hint, {
+      fontSize: '38px',
+    }).setOrigin(0.5).setAlpha(0.28)
+
+    // Overlay sombre sur le hint
+    const overlay = this.scene.add.graphics()
+    overlay.fillStyle(COL.wood_dark, 0.55)
+    overlay.fillRoundedRect(6, 22, CARD_W - 12, CARD_H - 32, 7)
+
+    // Icône cadenas
+    const lock = this.scene.add.text(CARD_W / 2, CARD_H / 2 - 10, '🔒', {
+      fontSize: '22px',
     }).setOrigin(0.5)
-    const lockedTxt = this.scene.add.text(CARD_W / 2, CARD_H / 2 + 22, 'À débloquer', {
-      fontSize: '8px', color: '#445566', fontFamily: 'sans-serif',
+
+    // Texte "À débloquer"
+    const txt = this.scene.add.text(CARD_W / 2, CARD_H / 2 + 18, 'À DÉBLOQUER', {
+      fontSize: '7px',
+      color: '#7a5535',
+      fontFamily: 'Cinzel, serif',
+      fontStyle: 'bold',
+      letterSpacing: 1,
     }).setOrigin(0.5)
-    this.add([lock, lockedTxt])
+
+    // XP hint
+    const xpTxt = this.scene.add.text(CARD_W / 2, CARD_H - 16, 'Joue pour débloquer', {
+      fontSize: '6px',
+      color: '#6b4c2a',
+      fontFamily: 'Nunito, sans-serif',
+    }).setOrigin(0.5)
+
+    this.add([hintText, overlay, lock, txt, xpTxt])
   }
 
   private drawContent() {
-    // Flag langue (haut centre)
-    const flag = this.scene.add.text(CARD_W / 2, 18, '🇰🇭', {
-      fontSize: '14px',
+    // Flag KH + texte
+    const flag = this.scene.add.text(CARD_W / 2, 20, '🇰🇭', {
+      fontSize: '13px',
     }).setOrigin(0.5)
 
-    // Texte KH (principal)
-    const khText = this.scene.add.text(CARD_W / 2, 52, this.card.kh, {
-      fontSize: this.card.kh.length > 8 ? '11px' : '14px',
-      color: '#f0f0ff',
-      fontFamily: '"Noto Sans Khmer", sans-serif',
+    const khText = this.scene.add.text(CARD_W / 2, 46, this.card.kh, {
+      fontSize: this.card.kh.length > 10 ? '11px' : '14px',
+      color: '#' + COL.text_kh.toString(16).padStart(6, '0'),
+      fontFamily: '"Noto Sans Khmer", Nunito, sans-serif',
+      fontStyle: 'bold',
       align: 'center',
       wordWrap: { width: CARD_W - 14 },
     }).setOrigin(0.5)
 
-    // Phonétique KH
-    const phonKh = this.scene.add.text(CARD_W / 2, 76, this.card.phonetic_kh ?? '', {
-      fontSize: '7.5px', color: '#58c4dc', fontStyle: 'italic',
-      fontFamily: 'sans-serif', align: 'center',
-      wordWrap: { width: CARD_W - 12 },
+    const phonKh = this.scene.add.text(CARD_W / 2, 70, this.card.phonetic_kh ?? '', {
+      fontSize: '7.5px',
+      color: '#' + COL.phonetic.toString(16).padStart(6, '0'),
+      fontFamily: 'Nunito, sans-serif',
+      fontStyle: 'italic',
+      align: 'center',
+      wordWrap: { width: CARD_W - 14 },
     }).setOrigin(0.5)
 
-    // Séparateur
+    // Séparateur décoratif
     const sep = this.scene.add.graphics()
-    sep.lineStyle(0.5, 0x58c4dc, 0.5)
-    sep.lineBetween(14, 90, CARD_W - 14, 90)
+    sep.lineStyle(1, 0x58c4dc, 0.4)
+    const mid = CARD_H / 2
+    sep.lineBetween(18, mid - 4, CARD_W - 18, mid - 4)
+    // Petits losanges aux extrémités
+    sep.fillStyle(0x58c4dc, 0.6)
+    sep.fillTriangle(14, mid - 4, 18, mid - 7, 18, mid - 1)
+    sep.fillTriangle(CARD_W - 14, mid - 4, CARD_W - 18, mid - 7, CARD_W - 18, mid - 1)
 
-    // Texte FR
-    const frFlag = this.scene.add.text(CARD_W / 2, 100, '🇫🇷', {
+    // Hint emoji (mini, visible sur cartes débloquées)
+    const hintMini = this.scene.add.text(CARD_W - 14, 8, this.card.hint ?? '', {
       fontSize: '11px',
     }).setOrigin(0.5)
 
-    const frText = this.scene.add.text(CARD_W / 2, 116, this.card.fr, {
-      fontSize: this.card.fr.length > 12 ? '8px' : '10px',
-      color: '#e0e8f0', fontFamily: 'sans-serif',
-      align: 'center', wordWrap: { width: CARD_W - 14 },
+    const frFlag = this.scene.add.text(CARD_W / 2, mid + 8, '🇫🇷', {
+      fontSize: '11px',
     }).setOrigin(0.5)
 
-    // Phonétique FR
-    const phonFr = this.scene.add.text(CARD_W / 2, 133, this.card.phonetic_fr ?? '', {
-      fontSize: '7px', color: '#a0b8cc', fontStyle: 'italic',
-      fontFamily: 'sans-serif', align: 'center',
+    const frText = this.scene.add.text(CARD_W / 2, mid + 24, this.card.fr, {
+      fontSize: this.card.fr.length > 14 ? '8px' : '10px',
+      color: '#' + COL.text_main.toString(16).padStart(6, '0'),
+      fontFamily: 'Nunito, sans-serif',
+      fontStyle: 'bold',
+      align: 'center',
+      wordWrap: { width: CARD_W - 14 },
+    }).setOrigin(0.5)
+
+    const phonFr = this.scene.add.text(CARD_W / 2, mid + 42, this.card.phonetic_fr ?? '', {
+      fontSize: '7px',
+      color: '#' + COL.phonetic_fr.toString(16).padStart(6, '0'),
+      fontFamily: 'Nunito, sans-serif',
+      fontStyle: 'italic',
+      align: 'center',
       wordWrap: { width: CARD_W - 12 },
     }).setOrigin(0.5)
 
-    // Badge mastered
     if (this._state === 'mastered') {
-      const star = this.scene.add.text(CARD_W - 12, 8, '⭐', { fontSize: '12px' }).setOrigin(0.5)
+      const star = this.scene.add.text(CARD_W - 13, 8, '⭐', { fontSize: '11px' }).setOrigin(0.5)
       this.add(star)
     }
 
-    this.add([flag, khText, phonKh, sep, frFlag, frText, phonFr])
+    this.add([flag, khText, phonKh, sep, hintMini, frFlag, frText, phonFr])
   }
 
   private redraw() {
@@ -198,48 +232,29 @@ export class MangaCard extends Phaser.GameObjects.Container {
     this.draw()
   }
 
-  // Animation d'apparition
   reveal(delay = 0) {
-    this.setScale(0.1)
-    this.setAlpha(0)
+    this.setScale(0.1).setAlpha(0)
     this.scene.tweens.add({
-      targets: this,
-      scaleX: 1, scaleY: 1, alpha: 1,
-      duration: 400,
-      delay,
-      ease: 'Back.easeOut',
+      targets: this, scaleX: 1, scaleY: 1, alpha: 1,
+      duration: 400, delay, ease: 'Back.easeOut',
     })
   }
 
-  // Flip 3D (scaleX 1→0→1)
   flip(onMid?: () => void) {
-    const t = this.scene.tweens.add({
-      targets: this,
-      scaleX: 0,
-      duration: 180,
-      ease: 'Sine.easeIn',
+    this.scene.tweens.add({
+      targets: this, scaleX: 0,
+      duration: 180, ease: 'Sine.easeIn',
       onComplete: () => {
         onMid?.()
-        this.scene.tweens.add({
-          targets: this,
-          scaleX: 1,
-          duration: 180,
-          ease: 'Sine.easeOut',
-        })
+        this.scene.tweens.add({ targets: this, scaleX: 1, duration: 180, ease: 'Sine.easeOut' })
       },
     })
-    this.flipTween = t
   }
 
-  // Pulse glow (pour unlock)
   pulseUnlock() {
     this.scene.tweens.add({
-      targets: this,
-      scaleX: 1.12, scaleY: 1.12,
-      duration: 200,
-      yoyo: true,
-      repeat: 2,
-      ease: 'Sine.easeInOut',
+      targets: this, scaleX: 1.12, scaleY: 1.12,
+      duration: 200, yoyo: true, repeat: 2, ease: 'Sine.easeInOut',
     })
   }
 

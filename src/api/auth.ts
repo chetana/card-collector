@@ -51,7 +51,45 @@ function setupGIS() {
     use_fedcm_for_prompt: true,
     callback: (resp: any) => handleCredential(resp.credential),
   })
-  google.accounts.id.prompt()
+
+  // Tenter le one-tap / FedCM — si non supporté, afficher le bouton visible
+  google.accounts.id.prompt((notification: any) => {
+    const reason = notification.getNotDisplayedReason?.()
+    if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+      // FedCM non disponible (UNSUPPORTED_OS, desktop Chrome, etc.) → bouton visible
+      showSignInButton()
+    }
+    if (reason === 'UNSUPPORTED_OS' || reason === 'suppressed_by_user' || reason === 'opt_out_or_no_session') {
+      showSignInButton()
+    }
+  })
+}
+
+function showSignInButton() {
+  // Vérifier si un bouton existe déjà
+  if (document.getElementById('gsi-btn-container')) return
+
+  const container = document.createElement('div')
+  container.id = 'gsi-btn-container'
+  container.style.cssText = `
+    position: fixed; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; z-index: 9999;
+    background: rgba(13,13,26,0.95); gap: 16px;
+  `
+  const label = document.createElement('p')
+  label.textContent = '❤️ Connexion requise'
+  label.style.cssText = 'color: #58c4dc; font-family: sans-serif; font-size: 15px; font-weight: bold;'
+
+  const btn = document.createElement('div')
+  btn.id = 'gsi-btn'
+  container.appendChild(label)
+  container.appendChild(btn)
+  document.body.appendChild(container)
+
+  const google = (window as any).google
+  google.accounts.id.renderButton(btn, {
+    theme: 'filled_black', size: 'large', text: 'continue_with', shape: 'pill',
+  })
 }
 
 async function handleCredential(credential: string) {
