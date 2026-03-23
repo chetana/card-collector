@@ -1712,6 +1712,7 @@ export class TowerDefenseScene extends Phaser.Scene {
     })
 
     this.makeOverlayBtn(root, cx, height * 0.76, '← Arcade', 0x0d0d0d, 0x555555, () => {
+      root.destroy(true)
       this.scene.start('GameSelectScene', this.sceneData)
     })
   }
@@ -1760,9 +1761,11 @@ export class TowerDefenseScene extends Phaser.Scene {
     }
 
     this.makeOverlayBtn(root, cx, height * 0.62, '🔄 Rejouer', 0x7c2d12, 0xf97316, () => {
+      root.destroy(true)
       this.scene.restart(this.sceneData)
     })
     this.makeOverlayBtn(root, cx, height * 0.72, '← Arcade', 0x0a1020, 0x406080, () => {
+      root.destroy(true)
       this.scene.start('GameSelectScene', this.sceneData)
     })
   }
