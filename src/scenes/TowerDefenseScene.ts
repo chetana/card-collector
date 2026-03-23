@@ -1597,19 +1597,24 @@ export class TowerDefenseScene extends Phaser.Scene {
     this.gameStarted = false
 
     const cx = width / 2
+    // Single container — destroy it all at once when a level is chosen
+    const root = this.add.container(0, 0).setDepth(50)
 
-    const bg = this.add.graphics().setDepth(50)
+    const bg = this.add.graphics()
     bg.fillStyle(0x000000, 0.88)
     bg.fillRect(0, 0, width, height)
+    root.add(bg)
 
-    this.add.text(cx, height * 0.08, '🏯 DÉFENSE D\'ANGKOR', {
+    const title = this.add.text(cx, height * 0.08, '🏯 DÉFENSE D\'ANGKOR', {
       fontFamily: 'Cinzel, Georgia, serif', fontSize: '22px', color: '#f5d060',
       stroke: '#2a1a00', strokeThickness: 3,
-    }).setOrigin(0.5).setDepth(51)
+    }).setOrigin(0.5)
+    root.add(title)
 
-    this.add.text(cx, height * 0.08 + 32, 'Protège Angkor Wat des envahisseurs!', {
+    const sub = this.add.text(cx, height * 0.08 + 32, 'Protège Angkor Wat des envahisseurs!', {
       fontFamily: 'sans-serif', fontSize: '12px', color: '#94a3b8',
-    }).setOrigin(0.5).setDepth(51)
+    }).setOrigin(0.5)
+    root.add(sub)
 
     const levelNames = ['Les Plaines', 'La Forêt Sacrée', 'Angkor']
     const levelStars = ['★☆☆', '★★☆', '★★★']
@@ -1618,70 +1623,62 @@ export class TowerDefenseScene extends Phaser.Scene {
     const cardW = Math.min(260, width - 40)
     const startY = height * 0.20
 
-    const containers: Phaser.GameObjects.Container[] = []
+    const dismiss = (levelIndex: number) => {
+      root.destroy(true)
+      this.gameStarted = true
+      this.initLevel(levelIndex)
+    }
 
     for (let i = 0; i < 3; i++) {
       const isUnlocked = i === 0 || !!localStorage.getItem(levelKeys[i - 1])
       const cardY = startY + i * (cardH + 12)
       const cardX = cx - cardW / 2
 
-      const cardBg = this.add.graphics().setDepth(51)
-      cardBg.fillStyle(isUnlocked ? 0x1a1000 : 0x0d0d0d, 0.95)
-      cardBg.fillRoundedRect(cardX, cardY, cardW, cardH, 10)
-      cardBg.lineStyle(2, isUnlocked ? 0xd4af37 : 0x333333, isUnlocked ? 0.8 : 0.4)
-      cardBg.strokeRoundedRect(cardX, cardY, cardW, cardH, 10)
+      const cardBg = this.add.graphics()
+      const drawCard = (hover: boolean) => {
+        cardBg.clear()
+        cardBg.fillStyle(isUnlocked ? (hover ? 0x2a1800 : 0x1a1000) : 0x0d0d0d, 0.95)
+        cardBg.fillRoundedRect(cardX, cardY, cardW, cardH, 10)
+        cardBg.lineStyle(hover ? 3 : 2, isUnlocked ? 0xd4af37 : 0x333333, isUnlocked ? (hover ? 1 : 0.8) : 0.4)
+        cardBg.strokeRoundedRect(cardX, cardY, cardW, cardH, 10)
+      }
+      drawCard(false)
+      root.add(cardBg)
 
-      this.add.text(cx, cardY + cardH * 0.28, `${isUnlocked ? '' : '🔒 '}${levelNames[i]}`, {
+      root.add(this.add.text(cx, cardY + cardH * 0.28, `${isUnlocked ? '' : '🔒 '}${levelNames[i]}`, {
         fontFamily: 'Cinzel, Georgia, serif', fontSize: '16px', color: isUnlocked ? '#f5d060' : '#555555',
-      }).setOrigin(0.5).setDepth(52)
+      }).setOrigin(0.5))
 
-      this.add.text(cx, cardY + cardH * 0.55, levelStars[i], {
+      root.add(this.add.text(cx, cardY + cardH * 0.55, levelStars[i], {
         fontFamily: 'sans-serif', fontSize: '18px', color: isUnlocked ? '#fbbf24' : '#333333',
-      }).setOrigin(0.5).setDepth(52)
+      }).setOrigin(0.5))
 
-      this.add.text(cx, cardY + cardH * 0.78, isUnlocked ? `${LEVELS[i].waves.length} vagues — ${LEVELS[i].startGold}💰 départ` : 'Terminer le niveau précédent', {
+      root.add(this.add.text(cx, cardY + cardH * 0.78,
+        isUnlocked ? `${LEVELS[i].waves.length} vagues — ${LEVELS[i].startGold}💰 départ` : 'Terminer le niveau précédent', {
         fontFamily: 'sans-serif', fontSize: '10px', color: isUnlocked ? '#94a3b8' : '#444444',
-      }).setOrigin(0.5).setDepth(52)
+      }).setOrigin(0.5))
 
       if (isUnlocked) {
         const zone = this.add.zone(cx, cardY + cardH / 2, cardW, cardH)
-          .setInteractive({ useHandCursor: true }).setDepth(53)
-        zone.on('pointerover', () => {
-          cardBg.clear()
-          cardBg.fillStyle(0x2a1800, 0.98)
-          cardBg.fillRoundedRect(cardX, cardY, cardW, cardH, 10)
-          cardBg.lineStyle(3, 0xd4af37, 1)
-          cardBg.strokeRoundedRect(cardX, cardY, cardW, cardH, 10)
-        })
-        zone.on('pointerout', () => {
-          cardBg.clear()
-          cardBg.fillStyle(0x1a1000, 0.95)
-          cardBg.fillRoundedRect(cardX, cardY, cardW, cardH, 10)
-          cardBg.lineStyle(2, 0xd4af37, 0.8)
-          cardBg.strokeRoundedRect(cardX, cardY, cardW, cardH, 10)
-        })
+          .setInteractive({ useHandCursor: true })
+        zone.on('pointerover', () => drawCard(true))
+        zone.on('pointerout',  () => drawCard(false))
         zone.on('pointerdown', () => {
           this.cameras.main.flash(120, 30, 20, 5)
-          this.time.delayedCall(120, () => {
-            // Destroy level select
-            containers.forEach(c => c.destroy())
-            bg.destroy()
-            this.gameStarted = true
-            this.initLevel(i)
-          })
+          this.time.delayedCall(120, () => dismiss(i))
         })
-        const c = this.add.container(0, 0, [zone])
-        containers.push(c)
+        root.add(zone)
       }
     }
 
     // Back button
     const backTxt = this.add.text(cx, height * 0.92, '← Arcade', {
       fontFamily: 'sans-serif', fontSize: '13px', color: '#607090',
-    }).setOrigin(0.5).setDepth(52).setInteractive({ useHandCursor: true })
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true })
     backTxt.on('pointerover', () => backTxt.setColor('#a0b8d0'))
     backTxt.on('pointerout',  () => backTxt.setColor('#607090'))
     backTxt.on('pointerdown', () => this.scene.start('GameSelectScene', this.sceneData))
+    root.add(backTxt)
   }
 
   // ── Level complete ────────────────────────────────────────────────
