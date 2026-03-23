@@ -1674,42 +1674,44 @@ export class TowerDefenseScene extends Phaser.Scene {
     const { width, height } = this.scale
     const cx = width / 2
 
-    // Save progress
     localStorage.setItem(`td_level${this.currentLevel + 1}_complete`, '1')
     const bestKey = 'best_td'
     const prev = parseInt(localStorage.getItem(bestKey) ?? '0', 10)
     if (this.score > prev) localStorage.setItem(bestKey, String(this.score))
 
-    const bg = this.add.graphics().setDepth(40)
+    const root = this.add.container(0, 0).setDepth(40)
+
+    const bg = this.add.graphics()
     bg.fillStyle(0x000000, 0.85)
     bg.fillRect(0, 0, width, height)
+    root.add(bg)
 
-    this.add.text(cx, height * 0.22, '🏆 NIVEAU TERMINÉ!', {
+    root.add(this.add.text(cx, height * 0.22, '🏆 NIVEAU TERMINÉ!', {
       fontFamily: 'Cinzel, Georgia, serif', fontSize: '26px', color: '#f5d060',
       stroke: '#000', strokeThickness: 4,
-    }).setOrigin(0.5).setDepth(41)
+    }).setOrigin(0.5))
 
-    this.add.text(cx, height * 0.36, `Score: ${this.score}`, {
+    root.add(this.add.text(cx, height * 0.36, `Score: ${this.score}`, {
       fontFamily: 'Cinzel, Georgia, serif', fontSize: '18px', color: '#e0eaff',
-    }).setOrigin(0.5).setDepth(41)
+    }).setOrigin(0.5))
 
-    this.add.text(cx, height * 0.44, `Vies restantes: ${this.lives}`, {
+    root.add(this.add.text(cx, height * 0.44, `Vies restantes: ${this.lives}`, {
       fontFamily: 'sans-serif', fontSize: '13px', color: '#94a3b8',
-    }).setOrigin(0.5).setDepth(41)
+    }).setOrigin(0.5))
 
     if (this.currentLevel < 2) {
-      this.makeOverlayBtn(cx, height * 0.56, 'Niveau Suivant ▶', 0x15803d, 0x22c55e, () => {
-        bg.destroy()
+      this.makeOverlayBtn(root, cx, height * 0.56, 'Niveau Suivant ▶', 0x15803d, 0x22c55e, () => {
+        root.destroy(true)
         this.showLevelSelect(width, height)
       })
     }
 
-    this.makeOverlayBtn(cx, height * 0.66, '🔄 Rejouer', 0x1e3a8a, 0x3b82f6, () => {
-      bg.destroy()
+    this.makeOverlayBtn(root, cx, height * 0.66, '🔄 Rejouer', 0x1e3a8a, 0x3b82f6, () => {
+      root.destroy(true)
       this.initLevel(this.currentLevel)
     })
 
-    this.makeOverlayBtn(cx, height * 0.76, '← Arcade', 0x0d0d0d, 0x555555, () => {
+    this.makeOverlayBtn(root, cx, height * 0.76, '← Arcade', 0x0d0d0d, 0x555555, () => {
       this.scene.start('GameSelectScene', this.sceneData)
     })
   }
@@ -1731,51 +1733,55 @@ export class TowerDefenseScene extends Phaser.Scene {
     const { width, height } = this.scale
     const cx = width / 2
 
-    const bg = this.add.graphics().setDepth(40)
+    const root = this.add.container(0, 0).setDepth(40)
+
+    const bg = this.add.graphics()
     bg.fillStyle(0x000000, 0.85)
     bg.fillRect(0, 0, width, height)
+    root.add(bg)
 
-    this.add.text(cx, height * 0.22, '💀 DÉFAITE', {
+    root.add(this.add.text(cx, height * 0.22, '💀 DÉFAITE', {
       fontFamily: 'Cinzel, Georgia, serif', fontSize: '32px', color: '#ef4444',
       stroke: '#000', strokeThickness: 5,
-    }).setOrigin(0.5).setDepth(41)
+    }).setOrigin(0.5))
 
     const best = localStorage.getItem('best_td') ?? '0'
-    this.add.text(cx, height * 0.38, `Score : ${this.score}`, {
+    root.add(this.add.text(cx, height * 0.38, `Score : ${this.score}`, {
       fontFamily: 'Cinzel, serif', fontSize: '18px', color: '#f5d060',
-    }).setOrigin(0.5).setDepth(41)
-    this.add.text(cx, height * 0.46, `Record : ${best}`, {
+    }).setOrigin(0.5))
+    root.add(this.add.text(cx, height * 0.46, `Record : ${best}`, {
       fontFamily: 'sans-serif', fontSize: '13px', color: '#aaa',
-    }).setOrigin(0.5).setDepth(41)
+    }).setOrigin(0.5))
 
     if (this.score >= parseInt(best, 10) && this.score > 0) {
-      this.add.text(cx, height * 0.53, '🏆 Nouveau record!', {
+      root.add(this.add.text(cx, height * 0.53, '🏆 Nouveau record!', {
         fontFamily: 'sans-serif', fontSize: '13px', color: '#ffd700',
-      }).setOrigin(0.5).setDepth(41)
+      }).setOrigin(0.5))
     }
 
-    this.makeOverlayBtn(cx, height * 0.62, '🔄 Rejouer', 0x7c2d12, 0xf97316, () => {
+    this.makeOverlayBtn(root, cx, height * 0.62, '🔄 Rejouer', 0x7c2d12, 0xf97316, () => {
       this.scene.restart(this.sceneData)
     })
-    this.makeOverlayBtn(cx, height * 0.72, '← Arcade', 0x0a1020, 0x406080, () => {
+    this.makeOverlayBtn(root, cx, height * 0.72, '← Arcade', 0x0a1020, 0x406080, () => {
       this.scene.start('GameSelectScene', this.sceneData)
     })
   }
 
-  private makeOverlayBtn(cx: number, cy: number, label: string, bgColor: number, borderColor: number, cb: () => void) {
+  private makeOverlayBtn(root: Phaser.GameObjects.Container, cx: number, cy: number, label: string, bgColor: number, borderColor: number, cb: () => void) {
     const w = 200, h = 44
-    const g = this.add.graphics().setDepth(42)
+    const g = this.add.graphics()
     g.fillStyle(bgColor, 0.95)
     g.fillRoundedRect(cx - w / 2, cy - h / 2, w, h, 10)
     g.lineStyle(2, borderColor, 0.9)
     g.strokeRoundedRect(cx - w / 2, cy - h / 2, w, h, 10)
     const txt = this.add.text(cx, cy, label, {
       fontFamily: 'Cinzel, serif', fontSize: '14px', color: '#fff',
-    }).setOrigin(0.5).setDepth(43)
-    const zone = this.add.zone(cx, cy, w, h).setInteractive({ useHandCursor: true }).setDepth(44)
+    }).setOrigin(0.5)
+    const zone = this.add.zone(cx, cy, w, h).setInteractive({ useHandCursor: true })
     zone.on('pointerover', () => txt.setScale(1.05))
     zone.on('pointerout', () => txt.setScale(1))
     zone.on('pointerdown', () => { this.cameras.main.flash(120, 20, 20, 50); this.time.delayedCall(80, cb) })
+    root.add([g, txt, zone])
   }
 
   // ── Main update loop ──────────────────────────────────────────────
