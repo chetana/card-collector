@@ -32,8 +32,10 @@ interface TDEnemy {
   x: number
   y: number
   sprite: Phaser.GameObjects.Container
-  hpBarBg: Phaser.GameObjects.Graphics
-  hpBar: Phaser.GameObjects.Graphics
+  hpBarBg: Phaser.GameObjects.Rectangle
+  hpBar: Phaser.GameObjects.Rectangle
+  hpBarMaxW: number
+  lastHp: number
   active: boolean
   immune: boolean
 }
@@ -1171,16 +1173,15 @@ export class TowerDefenseScene extends Phaser.Scene {
     const img = this.add.image(0, 0, `td_enemy_${type}`).setDisplaySize(bodySize, bodySize)
     const container = this.add.container(startWP.x, startWP.y, [img]).setDepth(5)
 
-    // HP bar
+    // HP bar — use Rectangle (no redraw needed, just position/size update)
     const barW = stats.large ? this.cellSize * 1.1 : this.cellSize * 0.85
     const barH = stats.large ? 7 : 5
-    const hpBarBg = this.add.graphics().setDepth(6)
-    hpBarBg.fillStyle(0x1f2937, 1)
-    hpBarBg.fillRect(-barW / 2, -bodySize / 2 - barH - 2, barW, barH)
-
-    const hpBar = this.add.graphics().setDepth(7)
-    hpBar.fillStyle(0x22c55e, 1)
-    hpBar.fillRect(-barW / 2 + 1, -bodySize / 2 - barH - 1, barW - 2, barH - 2)
+    const barX = startWP.x - barW / 2
+    const barY2 = startWP.y - bodySize / 2 - barH - 4
+    const hpBarBg = this.add.rectangle(barX, barY2, barW, barH, 0x1f2937)
+      .setOrigin(0, 0).setDepth(6)
+    const hpBar = this.add.rectangle(barX + 1, barY2 + 1, barW - 2, barH - 2, 0x22c55e)
+      .setOrigin(0, 0).setDepth(7)
 
     const id = ++this.enemyIdCounter
     const enemy: TDEnemy = {
@@ -1193,7 +1194,7 @@ export class TowerDefenseScene extends Phaser.Scene {
       poisoned: false, poisonTimer: 0, poisonDamage: 0,
       waypointIndex: 1,
       x: startWP.x, y: startWP.y,
-      sprite: container, hpBarBg, hpBar,
+      sprite: container, hpBarBg, hpBar, hpBarMaxW: barW - 2, lastHp: maxHp,
       active: true,
       immune: stats.immune,
     }
@@ -1276,17 +1277,20 @@ export class TowerDefenseScene extends Phaser.Scene {
     const bx = enemy.x - barW / 2
     const by = enemy.y - bodySize / 2 - barH - 4
 
-    enemy.hpBarBg.clear()
-    enemy.hpBarBg.fillStyle(0x1f2937, 1)
-    enemy.hpBarBg.fillRect(bx, by, barW, barH)
+    // Always move the bar to follow the enemy
+    enemy.hpBarBg.setPosition(bx, by)
+    enemy.hpBar.setPosition(bx + 1, by + 1)
 
-    const hpRatio = Math.max(0, enemy.hp / enemy.maxHp)
-    const r = Math.round(255 * (1 - hpRatio))
-    const g2 = Math.round(200 * hpRatio)
-    const hpColor = Phaser.Display.Color.GetColor(r, g2, 30)
-    enemy.hpBar.clear()
-    enemy.hpBar.fillStyle(hpColor, 1)
-    enemy.hpBar.fillRect(bx + 1, by + 1, (barW - 2) * hpRatio, barH - 2)
+    // Only update width/color when HP actually changed
+    if (enemy.hp !== enemy.lastHp) {
+      enemy.lastHp = enemy.hp
+      const hpRatio = Math.max(0, enemy.hp / enemy.maxHp)
+      const newW = Math.max(0, (enemy.hpBarMaxW) * hpRatio)
+      enemy.hpBar.setSize(newW, barH - 2)
+      const r = Math.round(255 * (1 - hpRatio))
+      const g2 = Math.round(200 * hpRatio)
+      enemy.hpBar.setFillStyle(Phaser.Display.Color.GetColor(r, g2, 30))
+    }
   }
 
   private killEnemy(enemy: TDEnemy) {
@@ -1539,16 +1543,22 @@ export class TowerDefenseScene extends Phaser.Scene {
     this.waveText.setText(`Vague ${this.currentWave}/${def.waves.length}`)
   }
 
+  private _floatingCount = 0
+  private readonly MAX_FLOATING = 12
+
   private showFloatingText(text: string, x: number, y: number, color: string) {
+    // Cap concurrent floating texts to avoid object accumulation on mass kills
+    if (this._floatingCount >= this.MAX_FLOATING) return
     const { width } = this.scale
     const safeX = Phaser.Math.Clamp(x, 30, width - 30)
     const t = this.add.text(safeX, y, text, {
-      fontFamily: 'Cinzel, Georgia, serif', fontSize: '12px', color,
+      fontFamily: 'sans-serif', fontSize: '11px', color,
       stroke: '#000000', strokeThickness: 2,
     }).setOrigin(0.5).setDepth(25)
+    this._floatingCount++
     this.tweens.add({
-      targets: t, y: y - 40, alpha: 0, duration: 1200, ease: 'Sine.easeOut',
-      onComplete: () => t.destroy(),
+      targets: t, y: y - 36, alpha: 0, duration: 900, ease: 'Sine.easeOut',
+      onComplete: () => { t.destroy(); this._floatingCount-- },
     })
   }
 
