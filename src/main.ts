@@ -4,6 +4,9 @@ import { VillageScene } from './scenes/VillageScene'
 import { PackScene } from './scenes/PackScene'
 import { CollectionScene } from './scenes/CollectionScene'
 import { VersusScene } from './scenes/VersusScene'
+import { MenuScene } from './scenes/MenuScene'
+import { RunnerScene } from './scenes/RunnerScene'
+import { GameOverScene } from './scenes/GameOverScene'
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -13,7 +16,11 @@ const config: Phaser.Types.Core.GameConfig = {
     mode: Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
-  scene: [LoadScene, VillageScene, PackScene, CollectionScene, VersusScene],
+  physics: {
+    default: 'arcade',
+    arcade: { gravity: { x: 0, y: 0 }, debug: false },
+  },
+  scene: [LoadScene, VillageScene, PackScene, CollectionScene, VersusScene, MenuScene, RunnerScene, GameOverScene],
   audio: {
     noAudio: true,
   },

@@ -73,7 +73,7 @@ export class LoadScene extends Phaser.Scene {
       setProgress(1)
 
       this.time.delayedCall(200, () => {
-        this.scene.start('VillageScene', { user, collection, cards, meKey })
+        this.scene.start('MenuScene', { user, collection, cards, meKey })
       })
     } catch (e) {
       status.setText('Erreur de connexion — réessaie').setColor('#ff6b6b')
