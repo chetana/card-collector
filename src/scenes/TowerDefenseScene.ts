@@ -207,7 +207,7 @@ export class TowerDefenseScene extends Phaser.Scene {
   private launchBtnTxt!: Phaser.GameObjects.Text
   private launchBtnZone!: Phaser.GameObjects.Zone
   private waveProgressBar!: Phaser.GameObjects.Graphics
-  private towerBtnContainers: Phaser.GameObjects.Container[] = []
+  private towerBtnData: { btnX: number; btnY: number; btnW: number; btnH: number; type: TowerType; btnBg: Phaser.GameObjects.Graphics }[] = []
   private towerBtnHighlights: Phaser.GameObjects.Graphics[] = []
   private towerTypes: TowerType[] = ['archer', 'monk', 'ballista', 'naga', 'elephant']
   private infoPanel: Phaser.GameObjects.Container | null = null
@@ -666,7 +666,7 @@ export class TowerDefenseScene extends Phaser.Scene {
     const btnH = Math.max(44, barH - 20)
     const startBtnX = 4
 
-    this.towerBtnContainers = []
+    this.towerBtnData = []
     this.towerBtnHighlights = []
 
     for (let i = 0; i < this.towerTypes.length; i++) {
@@ -675,60 +675,42 @@ export class TowerDefenseScene extends Phaser.Scene {
       const bx = startBtnX + i * (btnW + 4)
       const by = barY + 6
 
-      const hl = this.add.graphics().setDepth(11)
+      // Highlight ring (drawn on selection)
+      const hl = this.add.graphics().setDepth(13)
       this.towerBtnHighlights.push(hl)
 
+      // Button background
       const btnBg = this.add.graphics().setDepth(11)
-      btnBg.fillStyle(0x2d1b0e, 0.95)
-      btnBg.fillRoundedRect(bx, by, btnW, btnH - 4, 6)
-      btnBg.lineStyle(1, 0x5a3a1e, 0.8)
-      btnBg.strokeRoundedRect(bx, by, btnW, btnH - 4, 6)
+      const drawBtnBg = (hover: boolean) => {
+        btnBg.clear()
+        btnBg.fillStyle(hover ? 0x3d2b0e : 0x2d1b0e, 0.95)
+        btnBg.fillRoundedRect(bx, by, btnW, btnH - 4, 6)
+        btnBg.lineStyle(hover ? 2 : 1, hover ? 0xd4af37 : 0x5a3a1e, hover ? 0.9 : 0.8)
+        btnBg.strokeRoundedRect(bx, by, btnW, btnH - 4, 6)
+      }
+      drawBtnBg(false)
 
       // Tower mini icon
       const iconSize = Math.min(btnW - 8, btnH - 28)
-      const iconX = bx + btnW / 2 - iconSize / 2
-      const iconY = by + 4
-      const towerImg = this.add.image(iconX + iconSize / 2, iconY + iconSize / 2, `td_tower_${type}_1`)
+      const iconX = bx + btnW / 2
+      const iconY = by + 4 + iconSize / 2
+      this.add.image(iconX, iconY, `td_tower_${type}_1`)
         .setDisplaySize(iconSize, iconSize).setDepth(12)
 
       // Cost text
-      const costTxt = this.add.text(bx + btnW / 2, by + btnH - 14, `${base.emoji}${base.cost}💰`, {
-        fontFamily: 'sans-serif', fontSize: '10px', color: '#f5d060',
+      this.add.text(bx + btnW / 2, by + btnH - 16, `${base.emoji} ${base.cost}💰`, {
+        fontFamily: 'sans-serif', fontSize: '9px', color: '#f5d060',
       }).setOrigin(0.5, 1).setDepth(12)
 
       // Interactive zone
       const zone = this.add.zone(bx + btnW / 2, by + (btnH - 4) / 2, btnW, btnH - 4)
         .setInteractive({ useHandCursor: true }).setDepth(13)
 
-      zone.on('pointerover', () => {
-        btnBg.clear()
-        btnBg.fillStyle(0x3d2b0e, 0.98)
-        btnBg.fillRoundedRect(bx, by, btnW, btnH - 4, 6)
-        btnBg.lineStyle(2, 0xd4af37, 0.9)
-        btnBg.strokeRoundedRect(bx, by, btnW, btnH - 4, 6)
-      })
-      zone.on('pointerout', () => {
-        if (this.selectedTowerType !== type) {
-          btnBg.clear()
-          btnBg.fillStyle(0x2d1b0e, 0.95)
-          btnBg.fillRoundedRect(bx, by, btnW, btnH - 4, 6)
-          btnBg.lineStyle(1, 0x5a3a1e, 0.8)
-          btnBg.strokeRoundedRect(bx, by, btnW, btnH - 4, 6)
-        }
-      })
-      zone.on('pointerdown', () => {
-        this.selectTowerType(type)
-      })
+      zone.on('pointerover', () => drawBtnBg(true))
+      zone.on('pointerout',  () => { if (this.selectedTowerType !== type) drawBtnBg(false) })
+      zone.on('pointerdown', () => this.selectTowerType(type))
 
-      const container = this.add.container(0, 0, [btnBg, towerImg, costTxt])
-      container.setData('zone', zone)
-      container.setData('btnBg', btnBg)
-      container.setData('type', type)
-      container.setData('btnX', bx)
-      container.setData('btnY', by)
-      container.setData('btnW', btnW)
-      container.setData('btnH', btnH)
-      this.towerBtnContainers.push(container)
+      this.towerBtnData.push({ btnX: bx, btnY: by, btnW, btnH, type, btnBg })
     }
 
     // Right section (60%): HUD info
@@ -863,17 +845,12 @@ export class TowerDefenseScene extends Phaser.Scene {
 
   private updateTowerBtnHighlights() {
     for (const hl of this.towerBtnHighlights) hl.clear()
-    for (let i = 0; i < this.towerTypes.length; i++) {
-      const type = this.towerTypes[i]
-      const container = this.towerBtnContainers[i]
-      const bx = container.getData('btnX') as number
-      const by = container.getData('btnY') as number
-      const bw = container.getData('btnW') as number
-      const bh = container.getData('btnH') as number
+    for (let i = 0; i < this.towerBtnData.length; i++) {
+      const { btnX, btnY, btnW, btnH, type } = this.towerBtnData[i]
       const hl = this.towerBtnHighlights[i]
       if (this.selectedTowerType === type) {
         hl.lineStyle(3, 0xd4af37, 1)
-        hl.strokeRoundedRect(bx - 1, by - 1, bw + 2, bh - 2, 7)
+        hl.strokeRoundedRect(btnX - 1, btnY - 1, btnW + 2, btnH - 2, 7)
       }
     }
   }
