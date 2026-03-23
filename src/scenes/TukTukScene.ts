@@ -12,10 +12,12 @@ interface TukTukSceneData {
 interface Enemy {
   x: number
   y: number
+  lane: number
   type: EnemyType
   sprite: Phaser.GameObjects.Image
   active: boolean
   speed: number
+  hp: number
 }
 
 interface Bullet {
@@ -27,16 +29,12 @@ interface Bullet {
 
 type EnemyType = 'car' | 'moto' | 'durian' | 'bird'
 
-const ENEMY_TYPES: EnemyType[] = ['car', 'moto', 'durian', 'bird']
-
 export class TukTukScene extends Phaser.Scene {
   private sceneData!: TukTukSceneData
 
   // Layout
   private groundY = 0
-  private skyBottomY = 0
-  private playfieldTop = 0
-  private playfieldBottom = 0
+  private laneYs: number[] = []   // 3 lanes Y positions
 
   // Player
   private playerGfx!: Phaser.GameObjects.Image
@@ -46,34 +44,31 @@ export class TukTukScene extends Phaser.Scene {
   private invincible = false
   private invincibleTimer = 0
 
-  // Enemies
+  // Enemies & bullets
   private enemies: Enemy[] = []
-  private spawnTimer = 0
-  private nextSpawnDelay = 1200
-
-  // Bullets
   private bullets: Bullet[] = []
+  private spawnTimer = 0
   private shootTimer = 0
 
-  // Score / speed
+  // Score / combo
   private score = 0
-  private worldSpeed = 200
+  private combo = 0
+  private comboTimer = 0
+  private worldSpeed = 220
   private isAlive = true
+  private gameOverShown = false
+  private started = false
 
   // HUD
   private scoreTxt!: Phaser.GameObjects.Text
   private livesTxt!: Phaser.GameObjects.Text
   private speedTxt!: Phaser.GameObjects.Text
+  private comboTxt!: Phaser.GameObjects.Text
 
   // Backgrounds
   private bgFar!: Phaser.GameObjects.TileSprite
   private bgNear!: Phaser.GameObjects.TileSprite
   private road!: Phaser.GameObjects.TileSprite
-
-  // Overlay
-  private overlayGfx!: Phaser.GameObjects.Graphics
-  private overlayTxts: Phaser.GameObjects.Text[] = []
-  private gameOverShown = false
 
   constructor() { super('TukTukScene') }
 
@@ -84,119 +79,108 @@ export class TukTukScene extends Phaser.Scene {
   create() {
     const { width, height } = this.scale
 
-    this.groundY = height * 0.78
-    this.skyBottomY = height * 0.35
-    this.playfieldTop = this.skyBottomY + 10
-    this.playfieldBottom = this.groundY - 10
+    // Ground at 80% height, 3 evenly spaced lanes above
+    this.groundY = height * 0.80
+    const laneTop = height * 0.20
+    const laneSpan = this.groundY - laneTop - 40
+    this.laneYs = [
+      laneTop + laneSpan * 0.10,
+      laneTop + laneSpan * 0.45,
+      laneTop + laneSpan * 0.85,
+    ]
 
     this.generateTextures(width, height)
     this.drawSky(width, height)
     this.createScrollingLayers(width, height)
-    this.createPlayer(height)
+    this.drawLaneGuides(width)
+    this.createPlayer()
     this.createHUD(width)
-    this.setupInput(height)
-
-    this.isAlive = true
-    this.score = 0
-    this.lives = 3
-    this.worldSpeed = 200
-    this.spawnTimer = 0
-    this.shootTimer = 0
-    this.enemies = []
-    this.bullets = []
+    this.setupInput()
+    this.showTutorial(width, height)
   }
 
-  private generateTextures(width: number, height: number) {
-    // Far buildings
+  // ── Texture generation ────────────────────────────────────────────
+
+  private generateTextures(_width: number, _height: number) {
     if (!this.textures.exists('tt_bg_far')) {
       const g = this.make.graphics({ add: false } as any)
-      g.fillStyle(0x1a0a2e, 1)
       const buildings = [
         { x: 10, w: 55, h: 90 }, { x: 80, w: 40, h: 110, dome: true },
         { x: 140, w: 60, h: 80 }, { x: 220, w: 35, h: 100, stupa: true },
         { x: 270, w: 50, h: 85 }, { x: 340, w: 45, h: 95, dome: true },
         { x: 400, w: 38, h: 105 }, { x: 450, w: 55, h: 78 },
       ]
-      const baseY = 120
       for (const b of buildings) {
         g.fillStyle(0x1a0a2e, 1)
-        g.fillRect(b.x, baseY - b.h, b.w, b.h)
+        g.fillRect(b.x, 120 - b.h, b.w, b.h)
         if ((b as any).dome) {
-          g.fillEllipse(b.x + b.w / 2, baseY - b.h, b.w * 0.7, b.w * 0.5)
+          g.fillStyle(0x1a0a2e, 1)
+          g.fillEllipse(b.x + b.w / 2, 120 - b.h, b.w * 0.7, b.w * 0.5)
         }
         if ((b as any).stupa) {
-          g.fillTriangle(b.x + b.w / 2 - 6, baseY - b.h, b.x + b.w / 2 + 6, baseY - b.h, b.x + b.w / 2, baseY - b.h - 30)
+          g.fillStyle(0x1a0a2e, 1)
+          g.fillTriangle(b.x + b.w / 2 - 6, 120 - b.h, b.x + b.w / 2 + 6, 120 - b.h, b.x + b.w / 2, 120 - b.h - 30)
         }
       }
       g.generateTexture('tt_bg_far', 500, 120)
       g.destroy()
     }
 
-    // Near buildings
     if (!this.textures.exists('tt_bg_near')) {
       const g = this.make.graphics({ add: false } as any)
       g.fillStyle(0x0d0520, 1)
-      const nBuildings = [
+      const nbs = [
         { x: 0, w: 70, h: 60 }, { x: 90, w: 55, h: 75 },
         { x: 165, w: 65, h: 55 }, { x: 250, w: 50, h: 70 },
         { x: 320, w: 80, h: 65 },
       ]
-      for (const b of nBuildings) {
-        g.fillStyle(0x0d0520, 1)
+      for (const b of nbs) {
         g.fillRect(b.x, 80 - b.h, b.w, b.h)
       }
       g.generateTexture('tt_bg_near', 400, 80)
       g.destroy()
     }
 
-    // Road
     if (!this.textures.exists('tt_road')) {
       const g = this.make.graphics({ add: false } as any)
       g.fillStyle(0x1a1a1a, 1)
       g.fillRect(0, 0, 800, 60)
-      // Center yellow dashes
-      g.fillStyle(0xf5d060, 0.8)
+      g.fillStyle(0xf5d060, 0.7)
       for (let x = 0; x < 800; x += 60) {
-        g.fillRect(x, 28, 36, 4)
+        g.fillRect(x, 27, 36, 5)
       }
       g.generateTexture('tt_road', 800, 60)
       g.destroy()
     }
 
-    // Tuk-tuk player texture
     if (!this.textures.exists('tt_tuktuk')) {
       const g = this.make.graphics({ add: false } as any)
-      // Body
       g.fillStyle(0xf97316, 1)
-      g.fillRoundedRect(4, 6, 60, 30, 5)
-      // Roof trim
+      g.fillRoundedRect(4, 5, 62, 32, 6)
       g.fillStyle(0xf5d060, 1)
-      g.fillRect(4, 5, 60, 4)
-      // Windshield
-      g.fillStyle(0x87ceeb, 0.8)
-      g.fillRect(40, 10, 18, 16)
-      // Wheels
+      g.fillRect(4, 4, 62, 5)
+      g.fillStyle(0x7ec8e3, 0.85)
+      g.fillRect(42, 10, 20, 18)
       g.fillStyle(0x111111, 1)
-      g.fillCircle(18, 38, 9)
-      g.fillCircle(56, 38, 9)
-      g.fillStyle(0x444444, 1)
-      g.fillCircle(18, 38, 5)
-      g.fillCircle(56, 38, 5)
-      g.generateTexture('tt_tuktuk', 70, 46)
+      g.fillCircle(18, 40, 10); g.fillCircle(56, 40, 10)
+      g.fillStyle(0x555555, 1)
+      g.fillCircle(18, 40, 5); g.fillCircle(56, 40, 5)
+      // Exhaust pipe
+      g.fillStyle(0x888888, 1)
+      g.fillRect(0, 22, 6, 4)
+      g.generateTexture('tt_tuktuk', 72, 50)
       g.destroy()
     }
 
-    // Enemy textures
     if (!this.textures.exists('tt_car')) {
       const g = this.make.graphics({ add: false } as any)
       g.fillStyle(0xe53e3e, 1)
-      g.fillRoundedRect(0, 8, 58, 22, 4)
+      g.fillRoundedRect(2, 6, 56, 22, 4)
       g.fillStyle(0x87ceeb, 0.7)
-      g.fillRect(4, 10, 16, 10)
-      g.fillRect(38, 10, 16, 10)
+      g.fillRect(6, 8, 14, 10); g.fillRect(36, 8, 14, 10)
       g.fillStyle(0x111111, 1)
       g.fillCircle(12, 30, 7); g.fillCircle(46, 30, 7)
-      g.fillStyle(0x333333, 1)
+      g.fillStyle(0x444444, 1)
       g.fillCircle(12, 30, 4); g.fillCircle(46, 30, 4)
       g.generateTexture('tt_car', 60, 36)
       g.destroy()
@@ -206,203 +190,270 @@ export class TukTukScene extends Phaser.Scene {
       const g = this.make.graphics({ add: false } as any)
       g.fillStyle(0x3182ce, 1)
       g.fillRoundedRect(5, 10, 36, 14, 3)
-      // Rider silhouette
       g.fillStyle(0x1a202c, 1)
       g.fillEllipse(32, 8, 14, 12)
       g.fillRect(26, 12, 12, 10)
       g.fillStyle(0x111111, 1)
-      g.fillCircle(8, 24, 6); g.fillCircle(38, 24, 6)
-      g.fillStyle(0x333333, 1)
-      g.fillCircle(8, 24, 3); g.fillCircle(38, 24, 3)
-      g.generateTexture('tt_moto', 46, 30)
+      g.fillCircle(8, 26, 6); g.fillCircle(38, 26, 6)
+      g.fillStyle(0x444444, 1)
+      g.fillCircle(8, 26, 3); g.fillCircle(38, 26, 3)
+      g.generateTexture('tt_moto', 46, 32)
       g.destroy()
     }
 
     if (!this.textures.exists('tt_durian')) {
       const g = this.make.graphics({ add: false } as any)
-      g.fillStyle(0x9ae600, 1)
-      g.fillCircle(24, 24, 20)
-      g.fillStyle(0xd4ef10, 1)
-      // Spikes
-      for (let i = 0; i < 10; i++) {
-        const angle = (i / 10) * Math.PI * 2
-        const sx = 24 + Math.cos(angle) * 20
-        const sy = 24 + Math.sin(angle) * 20
-        const sx2 = 24 + Math.cos(angle) * 28
-        const sy2 = 24 + Math.sin(angle) * 28
-        g.fillTriangle(sx - 3, sy, sx + 3, sy, sx2, sy2)
+      g.fillStyle(0x86c90a, 1)
+      g.fillCircle(22, 22, 18)
+      g.fillStyle(0xc8e820, 1)
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * Math.PI * 2
+        const sx = 22 + Math.cos(a) * 18, sy = 22 + Math.sin(a) * 18
+        const ex = 22 + Math.cos(a) * 28, ey = 22 + Math.sin(a) * 28
+        g.fillTriangle(sx - 2, sy, sx + 2, sy, ex, ey)
       }
-      g.generateTexture('tt_durian', 48, 48)
+      g.generateTexture('tt_durian', 44, 44)
       g.destroy()
     }
 
     if (!this.textures.exists('tt_bird')) {
       const g = this.make.graphics({ add: false } as any)
-      g.fillStyle(0x2d3748, 1)
-      // Body
+      g.fillStyle(0x8b5cf6, 1)
       g.fillEllipse(20, 14, 24, 12)
-      // Left wing
-      g.fillTriangle(4, 14, 20, 8, 20, 16)
-      // Right wing
-      g.fillTriangle(36, 14, 20, 8, 20, 16)
-      // Head
+      g.fillTriangle(2, 14, 20, 8, 20, 18)
+      g.fillTriangle(38, 14, 20, 8, 20, 18)
       g.fillCircle(30, 10, 7)
-      // Beak
       g.fillStyle(0xf5d060, 1)
-      g.fillTriangle(36, 9, 42, 11, 36, 13)
-      g.generateTexture('tt_bird', 48, 26)
+      g.fillTriangle(36, 9, 43, 11, 36, 13)
+      g.generateTexture('tt_bird', 48, 28)
       g.destroy()
     }
-
-    void width
-    void height
   }
+
+  // ── Scene layout ──────────────────────────────────────────────────
 
   private drawSky(width: number, height: number) {
     const g = this.add.graphics().setDepth(0)
-    // Sunset gradient
-    g.fillGradientStyle(0xff7c40, 0xff7c40, 0x6b21a8, 0x4c1d95, 1)
+    g.fillGradientStyle(0xff6a30, 0xff6a30, 0x5b21b6, 0x3b0764, 1)
     g.fillRect(0, 0, width, this.groundY)
-    // Ground below
-    g.fillStyle(0x2d2d2d, 1)
+    // Horizon glow
+    g.fillGradientStyle(0xff9a5c, 0xff9a5c, 0xff6a30, 0xff6a30, 0.4)
+    g.fillRect(0, this.groundY * 0.55, width, 40)
+    // Ground
+    g.fillStyle(0x232323, 1)
     g.fillRect(0, this.groundY, width, height - this.groundY)
+    // Ground edge highlight
+    g.fillStyle(0x444444, 1)
+    g.fillRect(0, this.groundY, width, 3)
   }
 
   private createScrollingLayers(width: number, height: number) {
-    const farY = this.skyBottomY - 5
-    this.bgFar = this.add.tileSprite(0, farY - 115, width, 120, 'tt_bg_far')
+    const farY = this.groundY * 0.30
+    this.bgFar = this.add.tileSprite(0, farY - 60, width, 120, 'tt_bg_far')
       .setOrigin(0, 0).setDepth(1)
-
-    this.bgNear = this.add.tileSprite(0, this.groundY - 78, width, 80, 'tt_bg_near')
+    this.bgNear = this.add.tileSprite(0, this.groundY - 80, width, 80, 'tt_bg_near')
       .setOrigin(0, 0).setDepth(2)
-
     this.road = this.add.tileSprite(0, this.groundY, width, 60, 'tt_road')
       .setOrigin(0, 0).setDepth(2)
-
     void height
   }
 
-  private createPlayer(height: number) {
-    this.playerY = this.groundY - 24
+  private drawLaneGuides(width: number) {
+    const g = this.add.graphics().setDepth(1)
+    for (const ly of this.laneYs) {
+      // Subtle dashed lane line
+      g.lineStyle(1, 0xffffff, 0.07)
+      for (let x = 100; x < width; x += 40) {
+        g.lineBetween(x, ly, x + 22, ly)
+      }
+    }
+  }
+
+  private createPlayer() {
+    this.playerY = this.laneYs[2]   // start on bottom lane
     this.targetY = this.playerY
-
-    this.playerGfx = this.add.image(90, this.playerY, 'tt_tuktuk')
+    this.playerGfx = this.add.image(100, this.playerY, 'tt_tuktuk')
       .setOrigin(0.5, 0.5).setDepth(5)
-
-    void height
   }
 
   private createHUD(width: number) {
     const hudBg = this.add.graphics().setDepth(8)
-    hudBg.fillStyle(0x000000, 0.5)
-    hudBg.fillRect(0, 0, width, 36)
+    hudBg.fillStyle(0x000000, 0.55)
+    hudBg.fillRect(0, 0, width, 38)
 
-    this.livesTxt = this.add.text(10, 8, '❤️❤️❤️', {
-      fontSize: '16px',
-    }).setDepth(9)
+    this.livesTxt = this.add.text(10, 8, '❤️❤️❤️', { fontSize: '16px' }).setDepth(9)
 
     this.scoreTxt = this.add.text(width / 2, 8, 'Score: 0', {
-      fontFamily: 'Cinzel, Georgia, serif',
-      fontSize: '14px',
-      color: '#f5d060',
+      fontFamily: 'Cinzel, Georgia, serif', fontSize: '14px', color: '#f5d060',
     }).setOrigin(0.5, 0).setDepth(9)
 
-    this.speedTxt = this.add.text(width - 10, 8, '200 km/h', {
-      fontFamily: 'sans-serif',
-      fontSize: '12px',
-      color: '#a0c8ff',
+    this.speedTxt = this.add.text(width - 10, 8, '220 km/h', {
+      fontFamily: 'sans-serif', fontSize: '11px', color: '#a0c8ff',
     }).setOrigin(1, 0).setDepth(9)
+
+    this.comboTxt = this.add.text(width / 2, 42, '', {
+      fontFamily: 'Cinzel, Georgia, serif', fontSize: '13px', color: '#f97316',
+      stroke: '#000', strokeThickness: 2,
+    }).setOrigin(0.5, 0).setDepth(9).setAlpha(0)
   }
 
-  private setupInput(height: number) {
-    // Pointer: top half = up, bottom half = down
+  // ── Tutorial overlay ──────────────────────────────────────────────
+
+  private showTutorial(width: number, height: number) {
+    this.started = false
+    const cx = width / 2, cy = height / 2
+
+    const bg = this.add.graphics().setDepth(20)
+    bg.fillStyle(0x000000, 0.72)
+    bg.fillRoundedRect(cx - 150, cy - 110, 300, 220, 14)
+    bg.lineStyle(2, 0xf97316, 0.9)
+    bg.strokeRoundedRect(cx - 150, cy - 110, 300, 220, 14)
+
+    const title = this.add.text(cx, cy - 82, '🚗  TUK-TUK SHOOTER', {
+      fontFamily: 'Cinzel, serif', fontSize: '15px', color: '#f5d060',
+    }).setOrigin(0.5).setDepth(21)
+
+    const lines = [
+      '👆 Glisse le doigt (ou la souris)',
+      '   pour changer de lane',
+      '',
+      '🔫 Tu tires automatiquement',
+      '',
+      '💥 Évite les ennemis',
+      '   ou tire dessus pour scorer',
+    ]
+    const body = this.add.text(cx, cy - 28, lines.join('\n'), {
+      fontFamily: 'sans-serif', fontSize: '12px', color: '#e0e0e0',
+      align: 'center', lineSpacing: 4,
+    }).setOrigin(0.5, 0).setDepth(21)
+
+    const btnBg = this.add.graphics().setDepth(21)
+    btnBg.fillStyle(0xf97316, 1)
+    btnBg.fillRoundedRect(cx - 70, cy + 82, 140, 36, 10)
+
+    const btnTxt = this.add.text(cx, cy + 100, '▶  JOUER', {
+      fontFamily: 'Cinzel, serif', fontSize: '14px', color: '#fff', fontStyle: 'bold',
+    }).setOrigin(0.5).setDepth(22)
+
+    const zone = this.add.zone(cx, cy + 100, 140, 36).setInteractive({ useHandCursor: true }).setDepth(23)
+    zone.on('pointerover', () => btnTxt.setScale(1.07))
+    zone.on('pointerout',  () => btnTxt.setScale(1))
+    zone.on('pointerdown', () => {
+      ;[bg, btnBg].forEach(o => o.destroy())
+      ;[title, body, btnTxt].forEach(o => o.destroy())
+      zone.destroy()
+      this.started = true
+    })
+  }
+
+  // ── Input ─────────────────────────────────────────────────────────
+
+  private setupInput() {
+    // Follow pointer Y directly — most intuitive on mobile
+    this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
+      if (!this.started || !this.isAlive || this.gameOverShown) return
+      this.targetY = Phaser.Math.Clamp(p.y, this.laneYs[0] - 20, this.laneYs[2] + 20)
+    })
+
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
-      if (!this.isAlive || this.gameOverShown) return
-      if (p.y < height / 2) {
-        this.targetY = this.playfieldTop + 30
-      } else {
-        this.targetY = this.groundY - 24
-      }
+      if (!this.started || !this.isAlive || this.gameOverShown) return
+      this.targetY = Phaser.Math.Clamp(p.y, this.laneYs[0] - 20, this.laneYs[2] + 20)
     })
 
-    this.input.keyboard!.on('keydown', (event: KeyboardEvent) => {
-      if (!this.isAlive) return
-      if (event.key === 'ArrowUp' || event.key === 'w' || event.key === 'W') {
-        this.targetY = this.playfieldTop + 30
-      } else if (event.key === 'ArrowDown' || event.key === 's' || event.key === 'S') {
-        this.targetY = this.groundY - 24
+    // Keyboard: snap to lanes
+    this.input.keyboard!.on('keydown', (e: KeyboardEvent) => {
+      if (!this.started || !this.isAlive) return
+      const cur = this.closestLane(this.playerY)
+      if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
+        this.targetY = this.laneYs[Math.max(0, cur - 1)]
+      } else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') {
+        this.targetY = this.laneYs[Math.min(2, cur + 1)]
       }
     })
   }
+
+  private closestLane(y: number): number {
+    let best = 0, bestDist = Infinity
+    this.laneYs.forEach((ly, i) => {
+      const d = Math.abs(ly - y)
+      if (d < bestDist) { bestDist = d; best = i }
+    })
+    return best
+  }
+
+  // ── Main loop ─────────────────────────────────────────────────────
 
   update(_time: number, delta: number) {
-    if (!this.isAlive || this.gameOverShown) return
+    if (!this.started || !this.isAlive || this.gameOverShown) return
 
     const dt = delta / 1000
-    this.worldSpeed = Math.min(450, 200 + this.score * 0.3)
+    this.worldSpeed = Math.min(480, 220 + this.score * 0.25)
 
     // Scroll backgrounds
-    this.bgFar.tilePositionX += this.worldSpeed * 0.12 * dt
-    this.bgNear.tilePositionX += this.worldSpeed * 0.4 * dt
-    this.road.tilePositionX += this.worldSpeed * dt
+    this.bgFar.tilePositionX  += this.worldSpeed * 0.10 * dt
+    this.bgNear.tilePositionX += this.worldSpeed * 0.38 * dt
+    this.road.tilePositionX   += this.worldSpeed * dt
 
-    // Smooth player Y
+    // Smooth player Y (fast follow)
     const dy = this.targetY - this.playerGfx.y
-    this.playerGfx.y += dy * Math.min(1, 8 * dt)
-    // Clamp
-    this.playerGfx.y = Phaser.Math.Clamp(
-      this.playerGfx.y,
-      this.playfieldTop + 20,
-      this.playfieldBottom,
-    )
+    this.playerGfx.y += dy * Math.min(1, 10 * dt)
+
+    // Tuk-tuk slight tilt based on movement direction
+    this.playerGfx.angle = Phaser.Math.Clamp(dy * 0.18, -8, 8)
 
     // Invincibility blink
     if (this.invincible) {
       this.invincibleTimer -= delta
-      this.playerGfx.alpha = Math.sin(this.invincibleTimer * 0.01) > 0 ? 1 : 0.3
-      if (this.invincibleTimer <= 0) {
-        this.invincible = false
-        this.playerGfx.alpha = 1
+      this.playerGfx.alpha = Math.sin(this.invincibleTimer * 0.015) > 0 ? 1 : 0.25
+      if (this.invincibleTimer <= 0) { this.invincible = false; this.playerGfx.alpha = 1 }
+    }
+
+    // Combo decay
+    if (this.comboTimer > 0) {
+      this.comboTimer -= delta
+      if (this.comboTimer <= 0) {
+        this.combo = 0
+        this.comboTxt.setAlpha(0)
       }
     }
 
     // Shoot
     this.shootTimer -= delta
     if (this.shootTimer <= 0) {
-      this.shootTimer = 300
+      this.shootTimer = 260
       this.spawnBullet()
     }
 
     // Spawn enemies
     this.spawnTimer -= delta
     if (this.spawnTimer <= 0) {
-      const minDelay = Math.max(400, 800 - this.score * 2)
-      this.spawnTimer = minDelay + Math.random() * 400
+      const minDelay = Math.max(380, 900 - this.score * 1.8)
+      this.spawnTimer = minDelay + Math.random() * 350
       this.spawnEnemy()
     }
 
-    // Update bullets
     this.updateBullets(dt)
-
-    // Update enemies
     this.updateEnemies(dt)
 
-    // HUD
+    // HUD update
     this.scoreTxt.setText(`Score: ${this.score}`)
     this.speedTxt.setText(`${Math.round(this.worldSpeed)} km/h`)
   }
 
+  // ── Bullets ───────────────────────────────────────────────────────
+
   private spawnBullet() {
-    const activeBullets = this.bullets.filter(b => b.active)
-    if (activeBullets.length >= 8) return
+    if (this.bullets.filter(b => b.active).length >= 8) return
 
     const g = this.add.graphics().setDepth(6)
-    const bx = 120
-    const by = this.playerGfx.y
-    g.fillStyle(0xf97316, 1)
-    g.fillCircle(0, 0, 8)
-    g.x = bx
-    g.y = by
+    const bx = 132, by = this.playerGfx.y - 2
+
+    // Bullet: orange elongated oval with trail
+    g.fillStyle(0xff8c00, 1)
+    g.fillEllipse(0, 0, 18, 7)
+    g.fillStyle(0xffd700, 0.7)
+    g.fillEllipse(-8, 0, 8, 4)
+    g.x = bx; g.y = by
 
     this.bullets.push({ x: bx, y: by, gfx: g, active: true })
   }
@@ -411,39 +462,47 @@ export class TukTukScene extends Phaser.Scene {
     const { width } = this.scale
     for (const b of this.bullets) {
       if (!b.active) continue
-      b.x += 600 * dt
+      b.x += 620 * dt
       b.gfx.x = b.x
-      if (b.x > width + 20) {
-        b.active = false
-        b.gfx.destroy()
+      if (b.x > width + 30) {
+        b.active = false; b.gfx.destroy()
       }
     }
   }
 
+  // ── Enemies ───────────────────────────────────────────────────────
+
   private spawnEnemy() {
     const { width } = this.scale
+    const ENEMY_TYPES: EnemyType[] = ['car', 'moto', 'durian', 'bird']
     const type = ENEMY_TYPES[Math.floor(Math.random() * ENEMY_TYPES.length)]
-    const texKey = `tt_${type}`
 
-    let y: number
-    if (type === 'car' || type === 'moto') {
-      y = this.groundY - (type === 'car' ? 18 : 14)
-    } else {
-      y = this.playfieldTop + Math.random() * (this.playfieldBottom - this.playfieldTop)
-    }
+    // Birds on lane 0, cars/motos on lane 2, durians on any
+    let lane: number
+    if (type === 'bird') lane = 0
+    else if (type === 'car') lane = 2
+    else if (type === 'moto') lane = Math.random() < 0.6 ? 2 : 1
+    else lane = Math.floor(Math.random() * 3)
 
-    const sprite = this.add.image(width + 30, y, texKey)
-      .setOrigin(0.5, 0.5).setDepth(4)
-      // Mirror horizontally since enemy comes from right
-      .setFlipX(true)
+    const y = this.laneYs[lane]
+
+    const sprite = this.add.image(width + 40, y, `tt_${type}`)
+      .setOrigin(0.5, 0.5).setDepth(4).setFlipX(true)
+
+    // Scale: birds smaller, cars bigger
+    const scaleMap: Record<EnemyType, number> = { car: 1.1, moto: 0.95, durian: 0.9, bird: 0.85 }
+    sprite.setScale(scaleMap[type])
+
+    // Entrance animation
+    sprite.setScale(0.1)
+    this.tweens.add({ targets: sprite, scaleX: scaleMap[type], scaleY: scaleMap[type], duration: 220, ease: 'Back.easeOut' })
+
+    const hp = type === 'car' ? 2 : 1
 
     this.enemies.push({
-      x: width + 30,
-      y,
-      type,
-      sprite,
-      active: true,
-      speed: this.worldSpeed + Math.random() * 60,
+      x: width + 40, y, lane, type, sprite, active: true,
+      speed: this.worldSpeed + 40 + Math.random() * 50,
+      hp,
     })
   }
 
@@ -454,124 +513,157 @@ export class TukTukScene extends Phaser.Scene {
       e.x -= e.speed * dt
       e.sprite.x = e.x
 
-      // Check bullet collision
+      // Slight wobble for durian and bird
+      if (e.type === 'durian') {
+        e.sprite.y = e.y + Math.sin(e.x * 0.04) * 8
+      } else if (e.type === 'bird') {
+        e.sprite.y = e.y + Math.sin(e.x * 0.06) * 12
+      }
+
+      // Bullet collision
       for (const b of this.bullets) {
         if (!b.active) continue
-        const dx = b.x - e.x
-        const dy = b.y - e.y
-        if (Math.abs(dx) < 35 && Math.abs(dy) < 25) {
-          // Hit!
-          b.active = false
-          b.gfx.destroy()
-          this.destroyEnemy(e)
-          this.score += 10
+        if (Math.abs(b.x - e.x) < 38 && Math.abs(b.y - e.sprite.y) < 28) {
+          b.active = false; b.gfx.destroy()
+          e.hp--
+          if (e.hp <= 0) {
+            this.destroyEnemy(e)
+            this.addScore()
+          } else {
+            // Flash on damage
+            this.tweens.add({ targets: e.sprite, alpha: 0.3, duration: 80, yoyo: true })
+          }
           break
         }
       }
 
       if (!e.active) continue
 
-      // Check if enemy reached player zone
-      if (e.x < 120) {
-        const dy = Math.abs(e.y - this.playerGfx.y)
-        if (dy < 30) {
+      // Enemy past player → check hit
+      if (e.x < 130) {
+        if (Math.abs(e.sprite.y - this.playerGfx.y) < 32) {
           this.hitPlayer()
           this.destroyEnemy(e)
-        } else if (e.x < -60) {
+        } else if (e.x < -80) {
           this.destroyEnemy(e)
         }
       }
-
-      if (e.x < -80) {
-        this.destroyEnemy(e)
-      }
     }
 
+    // Clean up
     this.enemies = this.enemies.filter(e => e.active)
+    this.bullets = this.bullets.filter(b => b.active)
+  }
+
+  private addScore() {
+    this.combo++
+    this.comboTimer = 1800
+    const pts = 10 * Math.max(1, this.combo)
+    this.score += pts
+
+    // Show combo
+    if (this.combo >= 2) {
+      this.comboTxt.setText(`x${this.combo} COMBO !  +${pts}`)
+      this.comboTxt.setAlpha(1)
+      this.tweens.add({ targets: this.comboTxt, scaleX: 1.15, scaleY: 1.15, duration: 120, yoyo: true })
+    }
   }
 
   private destroyEnemy(e: Enemy) {
     e.active = false
-    // Flash + fade
+    this.spawnExplosion(e.x, e.sprite.y)
     this.tweens.add({
-      targets: e.sprite,
-      alpha: 0,
-      scaleX: 1.5,
-      scaleY: 1.5,
-      duration: 200,
-      ease: 'Sine.easeOut',
+      targets: e.sprite, alpha: 0, scaleX: 1.6, scaleY: 1.6,
+      duration: 180, ease: 'Sine.easeOut',
       onComplete: () => e.sprite.destroy(),
     })
+  }
+
+  private spawnExplosion(x: number, y: number) {
+    const colors = [0xff8c00, 0xffd700, 0xff4500, 0xffffff]
+    for (let i = 0; i < 8; i++) {
+      const angle = (i / 8) * Math.PI * 2 + Math.random() * 0.5
+      const speed = 60 + Math.random() * 80
+      const g = this.add.graphics().setDepth(7)
+      g.fillStyle(colors[i % colors.length], 1)
+      g.fillCircle(0, 0, 4 + Math.random() * 3)
+      g.x = x; g.y = y
+      this.tweens.add({
+        targets: g,
+        x: x + Math.cos(angle) * speed,
+        y: y + Math.sin(angle) * speed,
+        alpha: 0, scaleX: 0.2, scaleY: 0.2,
+        duration: 300 + Math.random() * 150,
+        ease: 'Sine.easeOut',
+        onComplete: () => g.destroy(),
+      })
+    }
   }
 
   private hitPlayer() {
     if (this.invincible) return
     this.lives--
+    this.combo = 0
+    this.comboTxt.setAlpha(0)
     this.updateLivesHUD()
 
-    if (this.lives <= 0) {
-      this.doGameOver()
-      return
-    }
+    if (this.lives <= 0) { this.doGameOver(); return }
 
     this.invincible = true
-    this.invincibleTimer = 2000
-    this.cameras.main.flash(300, 80, 0, 0)
+    this.invincibleTimer = 2200
+    this.cameras.main.shake(200, 0.012)
+    this.cameras.main.flash(200, 100, 0, 0)
   }
 
   private updateLivesHUD() {
     this.livesTxt.setText('❤️'.repeat(Math.max(0, this.lives)))
   }
 
+  // ── Game over ─────────────────────────────────────────────────────
+
   private doGameOver() {
     this.isAlive = false
-    this.saveBest()
-    this.cameras.main.flash(500, 80, 0, 0)
-    this.time.delayedCall(400, () => this.showGameOver())
-  }
-
-  private saveBest() {
     const prev = parseInt(localStorage.getItem('best_tuktuk') ?? '0', 10)
-    if (this.score > prev) {
-      localStorage.setItem('best_tuktuk', String(this.score))
-    }
+    if (this.score > prev) localStorage.setItem('best_tuktuk', String(this.score))
+    this.cameras.main.shake(400, 0.018)
+    this.cameras.main.flash(500, 80, 0, 0)
+    this.time.delayedCall(600, () => this.showGameOver())
   }
 
   private showGameOver() {
     this.gameOverShown = true
     const { width, height } = this.scale
-    const cx = width / 2
-    const cy = height / 2
+    const cx = width / 2, cy = height / 2
 
-    this.overlayGfx = this.add.graphics().setDepth(15)
-    this.overlayGfx.fillStyle(0x000000, 0.78)
-    this.overlayGfx.fillRect(0, 0, width, height)
+    const bg = this.add.graphics().setDepth(15)
+    bg.fillStyle(0x000000, 0.80)
+    bg.fillRect(0, 0, width, height)
 
-    const t1 = this.add.text(cx, cy - 70, 'GAME OVER', {
-      fontFamily: 'Cinzel, Georgia, serif',
-      fontSize: '32px',
-      color: '#ff6b6b',
-      stroke: '#000', strokeThickness: 3,
+    this.add.text(cx, cy - 80, 'GAME OVER', {
+      fontFamily: 'Cinzel, serif', fontSize: '34px', color: '#ff6b6b',
+      stroke: '#000', strokeThickness: 4,
     }).setOrigin(0.5).setDepth(16)
 
     const best = localStorage.getItem('best_tuktuk') ?? '0'
-    const t2 = this.add.text(cx, cy - 28, `Score: ${this.score}   |   Record: ${best}`, {
-      fontFamily: 'sans-serif', fontSize: '14px', color: '#f5d060',
+    this.add.text(cx, cy - 32, `Score : ${this.score}`, {
+      fontFamily: 'Cinzel, serif', fontSize: '20px', color: '#f5d060',
     }).setOrigin(0.5).setDepth(16)
 
-    this.overlayTxts = [t1, t2]
+    this.add.text(cx, cy + 2, `Record : ${best}`, {
+      fontFamily: 'sans-serif', fontSize: '13px', color: '#aaa',
+    }).setOrigin(0.5).setDepth(16)
 
-    this.makeBtn(cx, cy + 20, '▶  REJOUER', 0x1a1040, 0xa080d0, () => {
+    if (this.score > 0 && this.score >= parseInt(best, 10)) {
+      this.add.text(cx, cy + 22, '🏆 Nouveau record !', {
+        fontFamily: 'sans-serif', fontSize: '13px', color: '#ffd700',
+      }).setOrigin(0.5).setDepth(16)
+    }
+
+    this.makeBtn(cx, cy + 60, '▶  REJOUER', 0x7c2d12, 0xf97316, () => {
       this.scene.restart(this.sceneData)
     })
-
-    this.makeBtn(cx, cy + 72, '← Retour', 0x0a1020, 0x406080, () => {
-      this.scene.start('GameSelectScene', {
-        user: this.sceneData.user,
-        collection: this.sceneData.collection,
-        cards: this.sceneData.cards,
-        meKey: this.sceneData.meKey,
-      })
+    this.makeBtn(cx, cy + 112, '← Retour', 0x0a1020, 0x406080, () => {
+      this.scene.start('GameSelectScene', this.sceneData)
     })
   }
 
@@ -580,19 +672,14 @@ export class TukTukScene extends Phaser.Scene {
     const g = this.add.graphics().setDepth(16)
     g.fillStyle(bg, 0.95)
     g.fillRoundedRect(cx - w / 2, cy - h / 2, w, h, 10)
-    g.lineStyle(2, border, 0.8)
+    g.lineStyle(2, border, 0.9)
     g.strokeRoundedRect(cx - w / 2, cy - h / 2, w, h, 10)
-
     const txt = this.add.text(cx, cy, label, {
-      fontFamily: 'Cinzel, Georgia, serif', fontSize: '15px', color: '#ffffff',
+      fontFamily: 'Cinzel, serif', fontSize: '15px', color: '#fff',
     }).setOrigin(0.5).setDepth(17)
-
     const zone = this.add.zone(cx, cy, w, h).setInteractive({ useHandCursor: true }).setDepth(18)
-    zone.on('pointerover', () => { txt.setScale(1.05) })
-    zone.on('pointerout',  () => { txt.setScale(1) })
-    zone.on('pointerdown', () => {
-      this.cameras.main.flash(150, 20, 20, 50)
-      this.time.delayedCall(100, cb)
-    })
+    zone.on('pointerover', () => txt.setScale(1.06))
+    zone.on('pointerout',  () => txt.setScale(1))
+    zone.on('pointerdown', () => { this.cameras.main.flash(120, 20, 20, 50); this.time.delayedCall(80, cb) })
   }
 }
