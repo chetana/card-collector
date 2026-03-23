@@ -116,7 +116,7 @@ export class GameOverScene extends Phaser.Scene {
     })
 
     this.makeButton(cx, btnY2, '← Menu', 0x0a1020, 0x406080, () => {
-      this.scene.start('MenuScene', {
+      this.scene.start('GameSelectScene', {
         user: this.sceneData.user,
         collection: this.sceneData.collection,
         cards: this.sceneData.cards,

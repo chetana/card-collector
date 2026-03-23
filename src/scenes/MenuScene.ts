@@ -284,6 +284,18 @@ export class MenuScene extends Phaser.Scene {
       wordWrap: { width: width * 0.8 },
     }).setOrigin(0.5).setDepth(10)
 
+    // Back to GameSelect
+    const backTxt = this.add.text(cx, height * 0.82, '← Arcade', {
+      fontFamily: 'sans-serif',
+      fontSize: '13px',
+      color: '#607090',
+    }).setOrigin(0.5).setDepth(10).setInteractive({ useHandCursor: true })
+    backTxt.on('pointerover', () => backTxt.setColor('#a0b8d0'))
+    backTxt.on('pointerout',  () => backTxt.setColor('#607090'))
+    backTxt.on('pointerdown', () => {
+      this.scene.start('GameSelectScene', this.sceneData)
+    })
+
     // Version
     void btnX // suppress unused warning
   }
