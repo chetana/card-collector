@@ -11,6 +11,7 @@ import { GameSelectScene } from './scenes/GameSelectScene'
 import { SnakeScene } from './scenes/SnakeScene'
 import { TukTukScene } from './scenes/TukTukScene'
 import { BreakoutScene } from './scenes/BreakoutScene'
+import { TowerDefenseScene } from './scenes/TowerDefenseScene'
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -24,7 +25,7 @@ const config: Phaser.Types.Core.GameConfig = {
     default: 'arcade',
     arcade: { gravity: { x: 0, y: 0 }, debug: false },
   },
-  scene: [LoadScene, VillageScene, PackScene, CollectionScene, VersusScene, MenuScene, RunnerScene, GameOverScene, GameSelectScene, SnakeScene, TukTukScene, BreakoutScene],
+  scene: [LoadScene, VillageScene, PackScene, CollectionScene, VersusScene, MenuScene, RunnerScene, GameOverScene, GameSelectScene, SnakeScene, TukTukScene, BreakoutScene, TowerDefenseScene],
   audio: {
     noAudio: true,
   },
